@@ -1,0 +1,58 @@
+name: skynet-inventory-management
+
+services:
+  app:
+    build: .
+    env_file:
+      - .env
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      ASSET_URL: http://localhost:8000
+      APP_TIMEZONE: Asia/Jakarta
+      APP_LOCALE: id
+      APP_FALLBACK_LOCALE: id
+      APP_FAKER_LOCALE: id_ID
+      DB_CONNECTION: mysql
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_DATABASE: skynet_inventory
+      DB_USERNAME: skynet_inventory
+      DB_PASSWORD: skynet_inventory
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      SESSION_DRIVER: database
+      FILESYSTEM_DISK: public
+      FILAMENT_FILESYSTEM_DISK: public
+    ports:
+      - "8000:8000"
+    volumes:
+      - storage:/var/www/html/storage
+      - bootstrap-cache:/var/www/html/bootstrap/cache
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  mariadb:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: skynet_inventory
+      MARIADB_USER: skynet_inventory
+      MARIADB_PASSWORD: skynet_inventory
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -p$${MARIADB_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
+volumes:
+  mariadb-data:
+  storage:
+  bootstrap-cache:
