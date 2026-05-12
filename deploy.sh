@@ -42,7 +42,7 @@ done
 echo "Database is ready."
 
 echo "Running database migrations..."
-php artisan migrate --force --isolated
+php artisan migrate --force
 
 echo "Seeding default roles and users..."
 php artisan db:seed --force
