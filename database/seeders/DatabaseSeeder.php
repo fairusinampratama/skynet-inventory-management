@@ -2,19 +2,21 @@
 
 namespace Database\Seeders;
 
+use App\Enums\MovementType;
 use App\Enums\UserRole;
-use App\Models\ItemCategory;
 use App\Models\MovementPurpose;
 use App\Models\StockAdjustmentReason;
 use App\Models\StockLocation;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\Concerns\SeedsItemCategories;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {
+    use SeedsItemCategories;
     use WithoutModelEvents;
 
     /**
@@ -27,14 +29,7 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Skynet Admin', 'password' => 'password', 'role' => UserRole::Admin],
         );
 
-        User::updateOrCreate(
-            ['email' => 'warehouse@skynet.local'],
-            ['name' => 'Operator Gudang', 'password' => 'password', 'role' => UserRole::Warehouse],
-        );
-
-        foreach (['Distribusi', 'Feeder', 'IKR/PSB', 'Lainnya'] as $name) {
-            ItemCategory::firstOrCreate(['name' => $name], ['is_active' => true]);
-        }
+        $this->seedDefaultItemCategories();
 
         foreach ([['Pcs', 'Pcs'], ['Meter', 'Meter'], ['Roll', 'Roll'], ['Pack', 'Pack']] as [$name, $symbol]) {
             Unit::firstOrCreate(['symbol' => $symbol], ['name' => $name, 'is_active' => true]);
@@ -44,15 +39,15 @@ class DatabaseSeeder extends Seeder
         StockLocation::firstOrCreate(['code' => 'KRIAN'], ['name' => 'Krian', 'type' => 'branch', 'is_active' => true]);
 
         foreach ([
-            'maintenance' => 'Pemeliharaan',
-            'PSB' => 'PSB',
-            'pemasangan odp' => 'Pemasangan ODP',
-            'barang masuk' => 'Barang Masuk',
-            'stok krian' => 'Stok Krian',
-            'Cab Krian' => 'Cabang Krian',
-            'Migrasi' => 'Migrasi',
-        ] as $oldName => $name) {
-            $this->mergeMovementPurpose($oldName, $name);
+            'maintenance' => ['Pemeliharaan', MovementType::StockOut],
+            'PSB' => ['PSB', MovementType::StockOut],
+            'pemasangan odp' => ['Pemasangan ODP', MovementType::StockOut],
+            'barang masuk' => ['Barang Masuk', MovementType::StockIn],
+            'stok krian' => ['Stok Krian', MovementType::Transfer],
+            'Cab Krian' => ['Cabang Krian', MovementType::Transfer],
+            'Migrasi' => ['Migrasi', MovementType::StockIn],
+        ] as $oldName => [$name, $type]) {
+            $this->mergeMovementPurpose($oldName, $name, $type);
         }
 
         foreach ([
@@ -68,14 +63,14 @@ class DatabaseSeeder extends Seeder
         }
     }
 
-    private function mergeMovementPurpose(string $oldName, string $name): void
+    private function mergeMovementPurpose(string $oldName, string $name, MovementType $type): void
     {
         $canonical = MovementPurpose::firstOrCreate(
             ['name' => $name],
-            ['type' => (string) str($name)->slug(), 'is_active' => true],
+            ['type' => $type->value, 'is_active' => true],
         );
 
-        $canonical->update(['type' => (string) str($name)->slug(), 'is_active' => true]);
+        $canonical->update(['type' => $type->value, 'is_active' => true]);
 
         if ($oldName === $name) {
             return;

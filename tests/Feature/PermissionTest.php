@@ -25,18 +25,4 @@ class PermissionTest extends TestCase
 
         $this->assertTrue(UserResource::canAccess());
     }
-
-    public function test_warehouse_cannot_access_user_management(): void
-    {
-        $warehouse = User::create([
-            'name' => 'Warehouse',
-            'email' => 'warehouse@example.com',
-            'password' => 'password',
-            'role' => UserRole::Warehouse,
-        ]);
-
-        $this->actingAs($warehouse);
-
-        $this->assertFalse(UserResource::canAccess());
-    }
 }

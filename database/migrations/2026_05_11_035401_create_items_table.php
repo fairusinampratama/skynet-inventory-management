@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string('code')->nullable()->unique();
             $table->string('name')->unique();
-            $table->foreignId('item_category_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('unit_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('item_category_id')->constrained()->restrictOnDelete();
+            $table->foreignId('unit_id')->constrained()->restrictOnDelete();
             $table->decimal('price', 15, 2)->default(0);
             $table->decimal('opening_balance', 15, 3)->default(0);
             $table->decimal('minimum_stock', 15, 3)->default(0);

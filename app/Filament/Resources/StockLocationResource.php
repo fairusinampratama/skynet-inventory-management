@@ -41,7 +41,7 @@ class StockLocationResource extends Resource
         return $schema->components([
             TextInput::make('name')->label('Nama')->required()->maxLength(255)->unique(ignoreRecord: true),
             TextInput::make('code')->label('Kode')->maxLength(255)->unique(ignoreRecord: true),
-            Select::make('type')->label('Jenis')->options(['warehouse' => 'Gudang', 'branch' => 'Cabang'])->default('warehouse')->required(),
+            Select::make('type')->label('Jenis')->options(self::typeOptions())->default('warehouse')->required(),
             Toggle::make('is_active')->label('Aktif')->default(true),
             Textarea::make('notes')->label('Catatan')->columnSpanFull(),
         ]);
@@ -54,7 +54,7 @@ class StockLocationResource extends Resource
                 TextColumn::make('name')->label('Nama')->searchable()->sortable(),
                 TextColumn::make('code')->label('Kode')->searchable(),
                 TextColumn::make('type')->label('Jenis')->badge()
-                    ->formatStateUsing(fn (string $state): string => ['warehouse' => 'Gudang', 'branch' => 'Cabang'][$state] ?? $state),
+                    ->formatStateUsing(fn (string $state): string => self::typeOptions()[$state] ?? $state),
                 IconColumn::make('is_active')->label('Aktif')->boolean(),
             ])
             ->headerActions([CreateAction::make()])
@@ -64,5 +64,17 @@ class StockLocationResource extends Resource
     public static function getPages(): array
     {
         return ['index' => Pages\ManageStockLocations::route('/')];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function typeOptions(): array
+    {
+        return [
+            'warehouse' => 'Gudang',
+            'branch' => 'Cabang',
+            'field' => 'Lapangan / Teknisi',
+        ];
     }
 }

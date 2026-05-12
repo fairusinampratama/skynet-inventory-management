@@ -7,20 +7,6 @@ use App\Models\ItemCategory;
 
 class ItemCodeGenerator
 {
-    /**
-     * @var array<string, string>
-     */
-    private const PREFIXES = [
-        'Distribusi' => 'DST',
-        'Feeder' => 'FDR',
-        'IKR/PSB' => 'IKR',
-        'ONT/Router' => 'ONT',
-        'Aksesoris' => 'AKS',
-        'Alat' => 'ALT',
-        'Bahan Habis Pakai' => 'BHP',
-        'Lainnya' => 'LNY',
-    ];
-
     public function generate(?ItemCategory $category = null): string
     {
         $prefix = $this->prefixFor($category);
@@ -51,6 +37,6 @@ class ItemCodeGenerator
             return 'BRG';
         }
 
-        return self::PREFIXES[$category->name] ?? 'BRG';
+        return filled($category->code) ? str($category->code)->upper()->toString() : 'BRG';
     }
 }

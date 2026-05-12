@@ -39,6 +39,14 @@ class ItemCategoryResource extends Resource
     {
         return $schema->components([
             TextInput::make('name')->label('Nama')->required()->maxLength(255)->unique(ignoreRecord: true),
+            TextInput::make('code')
+                ->label('Kode')
+                ->helperText('Maksimal 3 karakter, dipakai sebagai prefix kode barang.')
+                ->required()
+                ->maxLength(3)
+                ->dehydrateStateUsing(fn (?string $state): ?string => filled($state) ? str($state)->upper()->toString() : null)
+                ->formatStateUsing(fn (?string $state): ?string => filled($state) ? str($state)->upper()->toString() : null)
+                ->unique(ignoreRecord: true),
             Toggle::make('is_active')->label('Aktif')->default(true),
             Textarea::make('description')->label('Deskripsi')->columnSpanFull(),
         ]);
@@ -49,6 +57,7 @@ class ItemCategoryResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->label('Nama')->searchable()->sortable(),
+                TextColumn::make('code')->label('Kode')->badge()->searchable()->sortable(),
                 IconColumn::make('is_active')->label('Aktif')->boolean(),
             ])
             ->headerActions([CreateAction::make()])

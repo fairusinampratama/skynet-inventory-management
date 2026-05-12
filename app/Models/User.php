@@ -34,9 +34,16 @@ class User extends Authenticatable implements FilamentUser
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (User $user): void {
+            $user->role ??= UserRole::Admin;
+        });
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
-        return in_array($this->role, [UserRole::Admin, UserRole::Warehouse], true);
+        return $this->isAdmin();
     }
 
     public function isAdmin(): bool

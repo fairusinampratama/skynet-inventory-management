@@ -1,44 +1,44 @@
 # Skynet Inventory Management
 
-Aplikasi inventory Laravel + Filament untuk operasional gudang Skynet. Aplikasi ini menyediakan master barang, pergerakan stok, saldo multi-lokasi, laporan stok menipis/kosong/minus, dan ekspor CSV.
+Laravel + Filament inventory management for Skynet warehouse operations. The app manages item masters, category-based item codes, multi-location stock movements, low/empty/negative stock reporting, and CSV exports.
 
-## Kebutuhan
+## Requirements
 
 - PHP 8.3+
 - Composer
 - Node.js + npm
-- MySQL/MariaDB
-- Ekstensi PHP: `pdo_mysql`, `intl`, `mbstring`, `xml`
+- MySQL or MariaDB
+- PHP extensions: `pdo_mysql`, `intl`, `mbstring`, `xml`
 
-## Setup Docker
+## Docker Setup
 
-Development lokal memakai Docker Compose dan MariaDB 11.4:
+Local development uses Docker Compose with MariaDB 11.4:
 
 ```bash
 cp .env.example .env
 docker compose up --build -d
 ```
 
-Aplikasi berjalan di `http://localhost:8000`; panel admin ada di `http://localhost:8000/admin`.
+The app runs at `http://localhost:8000`; the Filament admin panel is at `http://localhost:8000/admin`.
 
-Container akan menunggu MariaDB, menjalankan migrasi, seed user/pengaturan default, membersihkan cache, lalu menjalankan `php artisan serve`.
+On startup, the app container waits for MariaDB, runs migrations, seeds the default admin/settings data, clears caches, and starts `php artisan serve`.
 
-Catatan local Docker:
+Local Docker notes:
 
-- Source code tidak di-mount ke container. Setelah mengubah PHP, Blade, CSS, JS, migration, atau seeder, jalankan ulang `docker compose up --build -d`.
-- Data database tetap tersimpan di volume `mariadb-data`, jadi rebuild image tidak menghapus data.
-- Untuk reset penuh database lokal, hapus volume dengan `docker compose down -v`, lalu jalankan lagi `docker compose up --build -d`.
+- Source code is not mounted into the app container. After changing PHP, Blade, CSS, JS, migrations, or seeders, run `docker compose up --build -d` again.
+- Database data is persisted in the `mariadb-data` volume, so rebuilding the image does not wipe data.
+- To fully reset local data, run `docker compose down -v`, then `docker compose up --build -d`.
 
-Default MariaDB:
+Default MariaDB credentials:
 
-| Variabel | Nilai |
+| Setting | Value |
 | --- | --- |
 | Database | `skynet_inventory` |
 | User | `skynet_inventory` |
 | Password | `skynet_inventory` |
 | Root password | `root` |
 
-## Setup Manual
+## Manual Setup
 
 ```bash
 cp .env.example .env
@@ -49,65 +49,67 @@ php artisan migrate --seed
 npm run build
 ```
 
-User default:
+Default admin user:
 
-| Peran | Email | Password |
+| Role | Email | Password |
 | --- | --- | --- |
 | Admin | `admin@skynet.local` | `password` |
-| Gudang | `warehouse@skynet.local` | `password` |
 
-Buka panel admin di `/admin`.
+Open the admin panel at `/admin`.
 
-## Data Demo Inventory
+## Inventory Domain Notes
 
-Data demo dipisahkan dari seeder default supaya deployment produksi hanya mendapat user dan pengaturan dasar yang aman.
+- The application UI and operational seed data use Indonesian business labels.
+- Item codes are generated automatically from the selected item category code, for example `DST-0001`, `FDR-0001`, `IKR-0001`, `AKS-0001`, `BHP-0001`, `ONT-0001`, and `ALT-0001`.
+- Barang records require name, category, unit, price, opening stock, and minimum stock. Notes remain optional.
+- Movement purposes are categorized by movement type: stock in, stock out, transfer, or adjustment. The Stock Movement form filters purpose options based on the selected movement type.
+- Stock locations support `warehouse`, `branch`, and `field` types. These are currently informational labels and reporting/grouping metadata, not hard movement restrictions.
+- Item import and item aliases are intentionally not used.
 
-Setelah Docker berjalan dan migrasi selesai, muat atau reset data demo dengan:
-
-```bash
-docker compose exec app php artisan db:seed --class=DemoInventorySeeder
-```
-
-Seeder demo membuat dataset training inventory ISP yang lebih realistis:
-
-- 53 barang demo dengan kode `DEMO-...`.
-- Kategori barang seperti Distribusi, Feeder, IKR/PSB, ONT/Router, Aksesoris, Alat, dan Bahan Habis Pakai.
-- Lokasi `MAIN`, `KRIAN`, `SDA`, `SBYB`, `GRS`, dan `FIELD`.
-- Pergerakan stok berupa saldo awal, barang masuk supplier, transfer cabang, pemakaian harian, retur, dan penyesuaian stok.
-- Contoh status barang: stok aman, stok menipis, kosong, dan stok minus.
-
-Seeder ini idempotent: jika dijalankan ulang, data item dan pergerakan `DEMO-` lama akan diganti dengan dataset training yang sama.
-
-Alur coba cepat:
-
-1. Login di `http://localhost:8000/admin` memakai `admin@skynet.local` / `password`.
-2. Buka `Barang` untuk melihat contoh stok aman, stok menipis, kosong, dan stok minus.
-3. Buka `Pergerakan Stok` lalu filter berdasarkan jenis pergerakan, keperluan, atau PIC.
-4. Ekspor stok saat ini atau riwayat pergerakan dari action di header tabel.
-
-## Catatan Fitur
-
-- Bahasa aplikasi dan data operasional memakai Bahasa Indonesia.
-- Import barang tidak digunakan.
-- Alias barang tidak digunakan.
-- Kode barang bisa dikosongkan saat membuat barang baru; sistem akan membuat kode otomatis berdasarkan kategori.
-- Untuk mengisi kode pada barang lama yang belum punya kode, jalankan:
+To generate codes for legacy items without a code:
 
 ```bash
 docker compose exec app php artisan items:generate-missing-codes
 ```
 
-## Deployment Nixpacks
+## Demo Inventory Data
 
-Deployment memakai `nixpacks.toml`, `deploy.sh`, `supervisord.conf`, dan konfigurasi nginx/php-fpm di folder `docker/`, mengikuti pola aplikasi Laravel Skynet lain.
+Demo inventory data is separated from the default seeder so production deployments only receive the safe baseline admin/settings data.
 
-Set environment variable berikut di Coolify/Nixpacks:
+After Docker is running and migrations have completed, load or refresh demo inventory data with:
+
+```bash
+docker compose exec app php artisan db:seed --class=DemoInventorySeeder
+```
+
+The demo seeder creates a realistic ISP warehouse training dataset:
+
+- 53 demo items with category-based item codes.
+- Item categories such as Distribusi, Feeder, IKR/PSB, ONT/Router, Aksesoris, Alat, and Bahan Habis Pakai.
+- Locations `MAIN`, `KRIAN`, `SDA`, `SBYB`, `GRS`, and `FIELD`.
+- Stock movements for opening balances, supplier restocks, branch transfers, daily usage, returns, and adjustments.
+- Example stock statuses: safe stock, low stock, empty stock, and negative stock.
+
+The demo seeder is idempotent for the demo dataset. When rerun, it replaces previous demo items and demo movements with the same training dataset.
+
+Quick trial flow:
+
+1. Log in at `http://localhost:8000/admin` with `admin@skynet.local` / `password`.
+2. Open `Barang` to inspect item codes, categories, units, and stock status examples.
+3. Open `Pergerakan Stok` and filter by movement type, purpose, or PIC.
+4. Export current stock or movement history from the table header actions.
+
+## Deployment With Nixpacks
+
+Deployment uses `nixpacks.toml`, `deploy.sh`, `supervisord.conf`, and nginx/php-fpm configuration under `docker/`, following the same pattern as other Skynet Laravel apps.
+
+Set these environment variables in Coolify/Nixpacks:
 
 ```bash
 APP_KEY=base64:...
 APP_ENV=production
 APP_DEBUG=false
-APP_URL=https://domain-inventory-anda
+APP_URL=https://your-inventory-domain
 APP_LOCALE=id
 APP_FALLBACK_LOCALE=en
 APP_FAKER_LOCALE=id_ID
@@ -125,12 +127,15 @@ FILESYSTEM_DISK=public
 FILAMENT_FILESYSTEM_DISK=public
 ```
 
-`deploy.sh` menunggu database, menjalankan migrasi, seed user/pengaturan default, membuat storage link, lalu cache config/view.
+`deploy.sh` waits for the database, runs migrations, seeds default admin/settings data, creates the storage link, and caches configuration/views.
 
-## Command Berguna
+## Useful Commands
 
 ```bash
-php artisan test
 php artisan route:list --path=exports
+php artisan test
 composer run dev
+docker compose logs -f app
 ```
+
+Note: the production-style Docker image installs Composer dependencies with `--no-dev`, so PHPUnit is expected to run on the host development environment rather than inside the app container.

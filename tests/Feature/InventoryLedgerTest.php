@@ -23,11 +23,12 @@ class InventoryLedgerTest extends TestCase
         $this->movement(MovementType::StockOut, $item, 3, source: $main);
         $this->movement(MovementType::Transfer, $item, 4, source: $main, destination: $krian);
         $this->movement(MovementType::Adjustment, $item, 2, destination: $main);
+        $this->movement(MovementType::Adjustment, $item, 1, source: $main);
 
         $item->refresh();
 
-        $this->assertSame(14.0, $item->current_stock);
-        $this->assertSame(10.0, $item->stockForLocation($main->id));
+        $this->assertSame(13.0, $item->current_stock);
+        $this->assertSame(9.0, $item->stockForLocation($main->id));
         $this->assertSame(4.0, $item->stockForLocation($krian->id));
     }
 

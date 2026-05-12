@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ItemResource\Pages;
 use App\Models\Item;
+use App\Services\ItemCodeGenerator;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -16,6 +17,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
@@ -40,15 +42,50 @@ class ItemResource extends Resource
         return $schema->components([
             TextInput::make('code')
                 ->label('Kode')
-                ->helperText('Kosongkan untuk dibuat otomatis.')
+                ->helperText('Dibuat otomatis oleh sistem.')
+                ->default(fn (): string => app(ItemCodeGenerator::class)->generateForCategoryId(null))
+                ->disabled()
+                ->dehydrated()
                 ->maxLength(255)
                 ->unique(ignoreRecord: true),
             TextInput::make('name')->label('Nama')->required()->maxLength(255)->unique(ignoreRecord: true),
-            Select::make('item_category_id')->label('Jenis')->relationship('category', 'name')->searchable()->preload(),
-            Select::make('unit_id')->label('Satuan')->relationship('unit', 'symbol')->searchable()->preload(),
-            TextInput::make('price')->label('Harga')->numeric()->prefix('Rp')->default(0),
-            TextInput::make('opening_balance')->label('Saldo Awal')->numeric()->default(0)->required(),
-            TextInput::make('minimum_stock')->label('Stok Minimum')->numeric()->default(2)->required(),
+            Select::make('item_category_id')
+                ->label('Jenis')
+                ->relationship('category', 'name')
+                ->searchable()
+                ->preload()
+                ->required()
+                ->live()
+                ->afterStateUpdated(fn (?int $state, Set $set): mixed => $set('code', app(ItemCodeGenerator::class)->generateForCategoryId($state))),
+            Select::make('unit_id')->label('Satuan')->relationship('unit', 'symbol')->searchable()->preload()->required(),
+            TextInput::make('price')
+                ->label('Harga')
+                ->numeric()
+                ->inputMode('decimal')
+                ->prefix('Rp')
+                ->step('0.01')
+                ->placeholder('0.00')
+                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 2, '.', ''))
+                ->default('0.00')
+                ->required(),
+            TextInput::make('opening_balance')
+                ->label('Stok')
+                ->numeric()
+                ->inputMode('decimal')
+                ->step('0.001')
+                ->placeholder('0.000')
+                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 3, '.', ''))
+                ->default('0.000')
+                ->required(),
+            TextInput::make('minimum_stock')
+                ->label('Stok Minimum')
+                ->numeric()
+                ->inputMode('decimal')
+                ->step('0.001')
+                ->placeholder('0.000')
+                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 3, '.', ''))
+                ->default('2.000')
+                ->required(),
             Toggle::make('requires_serial_tracking')->label('Siapkan pelacakan serial')->default(false),
             Toggle::make('is_active')->label('Aktif')->default(true),
             Textarea::make('notes')->label('Catatan')->columnSpanFull(),

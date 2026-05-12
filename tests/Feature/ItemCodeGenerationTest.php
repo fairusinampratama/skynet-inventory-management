@@ -13,29 +13,32 @@ class ItemCodeGenerationTest extends TestCase
 
     public function test_item_code_is_generated_from_category_prefix(): void
     {
-        $category = ItemCategory::create(['name' => 'Distribusi']);
+        $category = ItemCategory::create(['name' => 'Kabel FO', 'code' => 'FE']);
 
         $first = Item::create(['name' => 'Kabel FO 1C', 'item_category_id' => $category->id]);
         $second = Item::create(['name' => 'Kabel FO 2C', 'item_category_id' => $category->id]);
 
-        $this->assertSame('DST-0001', $first->code);
-        $this->assertSame('DST-0002', $second->code);
+        $this->assertSame('FE-0001', $first->code);
+        $this->assertSame('FE-0002', $second->code);
     }
 
     public function test_item_code_uses_different_prefixes_and_generic_fallback(): void
     {
-        $feeder = ItemCategory::create(['name' => 'Feeder']);
+        $distribution = ItemCategory::create(['name' => 'Distribusi', 'code' => 'DST']);
+        $feeder = ItemCategory::create(['name' => 'Feeder', 'code' => 'FDR']);
 
+        $distributionItem = Item::create(['name' => 'Kabel Distribusi 12C', 'item_category_id' => $distribution->id]);
         $feederItem = Item::create(['name' => 'Kabel FO 24C', 'item_category_id' => $feeder->id]);
         $uncategorizedItem = Item::create(['name' => 'Barang Tanpa Jenis']);
 
+        $this->assertSame('DST-0001', $distributionItem->code);
         $this->assertSame('FDR-0001', $feederItem->code);
         $this->assertSame('BRG-0001', $uncategorizedItem->code);
     }
 
     public function test_manual_code_is_preserved_and_unrelated_codes_do_not_affect_sequence(): void
     {
-        $category = ItemCategory::create(['name' => 'Distribusi']);
+        $category = ItemCategory::create(['name' => 'Distribusi', 'code' => 'DST']);
 
         $manual = Item::create(['name' => 'Demo Kabel', 'code' => 'DEMO-FO-001', 'item_category_id' => $category->id]);
         $generated = Item::create(['name' => 'Kabel Baru', 'item_category_id' => $category->id]);
@@ -46,7 +49,7 @@ class ItemCodeGenerationTest extends TestCase
 
     public function test_backfill_command_only_generates_missing_codes(): void
     {
-        $category = ItemCategory::create(['name' => 'Aksesoris']);
+        $category = ItemCategory::create(['name' => 'Aksesoris', 'code' => 'AKS']);
         Item::withoutEvents(fn () => Item::create(['name' => 'Patchcord', 'item_category_id' => $category->id, 'code' => null]));
         $manual = Item::create(['name' => 'Fast Connector', 'item_category_id' => $category->id, 'code' => 'MANUAL-001']);
 

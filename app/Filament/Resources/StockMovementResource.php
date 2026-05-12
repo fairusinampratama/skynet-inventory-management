@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Enums\MovementType;
 use App\Filament\Resources\StockMovementResource\Pages;
+use App\Models\MovementPurpose;
 use App\Models\StockMovement;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -18,11 +19,14 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class StockMovementResource extends Resource
 {
@@ -39,16 +43,92 @@ class StockMovementResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            TextInput::make('movement_number')
+                ->label('Nomor')
+                ->default(fn (): string => StockMovement::nextMovementNumber())
+                ->disabled()
+                ->dehydrated()
+                ->maxLength(255)
+                ->unique(ignoreRecord: true),
             DatePicker::make('movement_date')->label('Tanggal')->required()->default(now()),
             Select::make('type')
                 ->label('Jenis Pergerakan')
                 ->options(collect(MovementType::cases())->mapWithKeys(fn (MovementType $type): array => [$type->value => $type->label()])->all())
                 ->required()
-                ->live(),
-            Select::make('source_location_id')->label('Lokasi Asal')->relationship('sourceLocation', 'name')->searchable()->preload(),
-            Select::make('destination_location_id')->label('Lokasi Tujuan')->relationship('destinationLocation', 'name')->searchable()->preload(),
-            Select::make('movement_purpose_id')->label('Keperluan')->relationship('purpose', 'name')->searchable()->preload(),
-            Select::make('stock_adjustment_reason_id')->label('Alasan Penyesuaian')->relationship('adjustmentReason', 'name')->searchable()->preload(),
+                ->live()
+                ->afterStateUpdated(function (MovementType|string|null $state, Get $get, Set $set): void {
+                    $type = $state instanceof MovementType ? $state->value : $state;
+
+                    if (! in_array($type, [MovementType::StockOut->value, MovementType::Transfer->value, MovementType::Adjustment->value], true)) {
+                        $set('source_location_id', null);
+                    }
+
+                    if (! in_array($type, [MovementType::StockIn->value, MovementType::Transfer->value, MovementType::Adjustment->value], true)) {
+                        $set('destination_location_id', null);
+                    }
+
+                    if ($type !== MovementType::Adjustment->value) {
+                        $set('stock_adjustment_reason_id', null);
+                    }
+
+                    $purpose = $get('movement_purpose_id')
+                        ? MovementPurpose::find($get('movement_purpose_id'))
+                        : null;
+
+                    if ($purpose && $purpose->type !== $type) {
+                        $set('movement_purpose_id', null);
+                    }
+                }),
+            Select::make('source_location_id')
+                ->label('Lokasi Asal')
+                ->relationship('sourceLocation', 'name')
+                ->searchable()
+                ->preload()
+                ->live()
+                ->afterStateUpdated(function (mixed $state, Get $get, Set $set): void {
+                    if (filled($state) && self::movementTypeIs($get, MovementType::Adjustment)) {
+                        $set('destination_location_id', null);
+                    }
+                })
+                ->visible(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockOut, MovementType::Transfer, MovementType::Adjustment))
+                ->required(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockOut, MovementType::Transfer) || (self::movementTypeIs($get, MovementType::Adjustment) && blank($get('destination_location_id'))))
+                ->rule('prohibits:destination_location_id', fn (Get $get): bool => self::movementTypeIs($get, MovementType::Adjustment) && filled($get('source_location_id'))),
+            Select::make('destination_location_id')
+                ->label('Lokasi Tujuan')
+                ->relationship('destinationLocation', 'name')
+                ->searchable()
+                ->preload()
+                ->live()
+                ->afterStateUpdated(function (mixed $state, Get $get, Set $set): void {
+                    if (filled($state) && self::movementTypeIs($get, MovementType::Adjustment)) {
+                        $set('source_location_id', null);
+                    }
+                })
+                ->visible(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockIn, MovementType::Transfer, MovementType::Adjustment))
+                ->required(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockIn, MovementType::Transfer) || (self::movementTypeIs($get, MovementType::Adjustment) && blank($get('source_location_id'))))
+                ->rule('prohibits:source_location_id', fn (Get $get): bool => self::movementTypeIs($get, MovementType::Adjustment) && filled($get('destination_location_id'))),
+            Select::make('movement_purpose_id')
+                ->label('Keperluan')
+                ->options(function (Get $get): array {
+                    $type = $get('type');
+                    $type = $type instanceof MovementType ? $type->value : $type;
+
+                    return MovementPurpose::query()
+                        ->where('is_active', true)
+                        ->when($type, fn (Builder $query, string $type): Builder => $query->where('type', $type))
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all();
+                })
+                ->searchable()
+                ->preload(),
+            Select::make('stock_adjustment_reason_id')
+                ->label('Alasan Penyesuaian')
+                ->relationship('adjustmentReason', 'name')
+                ->searchable()
+                ->preload()
+                ->visible(fn (Get $get): bool => self::movementTypeIs($get, MovementType::Adjustment))
+                ->required(fn (Get $get): bool => self::movementTypeIs($get, MovementType::Adjustment)),
             TextInput::make('pic')->label('PIC')->maxLength(255),
             Textarea::make('notes')->label('Catatan')->columnSpanFull(),
             Repeater::make('lines')
@@ -56,10 +136,17 @@ class StockMovementResource extends Resource
                 ->relationship()
                 ->schema([
                     Select::make('item_id')->label('Barang')->relationship('item', 'name')->searchable()->preload()->required(),
-                    TextInput::make('quantity')->label('Jumlah')->numeric()->minValue(0.001)->required(),
-                    Textarea::make('notes')->label('Catatan'),
+                    TextInput::make('quantity')
+                        ->label('Jumlah')
+                        ->numeric()
+                        ->inputMode('decimal')
+                        ->step('0.001')
+                        ->placeholder('0.000')
+                        ->minValue(0.001)
+                        ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 3, '.', ''))
+                        ->required(),
                 ])
-                ->columns(3)
+                ->columns(2)
                 ->minItems(1)
                 ->columnSpanFull(),
         ]);
@@ -69,6 +156,8 @@ class StockMovementResource extends Resource
     {
         return $table
             ->recordTitleAttribute('movement_number')
+            ->defaultSort('created_at', 'desc')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->orderByDesc('id'))
             ->columns([
                 TextColumn::make('movement_number')->label('Nomor')->searchable()->sortable(),
                 TextColumn::make('movement_date')->label('Tanggal')->date()->sortable(),
@@ -107,5 +196,19 @@ class StockMovementResource extends Resource
         return [
             'index' => Pages\ManageStockMovements::route('/'),
         ];
+    }
+
+    private static function movementTypeIs(Get $get, MovementType ...$types): bool
+    {
+        $state = $get('type');
+        $value = $state instanceof MovementType ? $state->value : $state;
+
+        foreach ($types as $type) {
+            if ($value === $type->value) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
