@@ -25,6 +25,13 @@ fi
 echo "Removing stale bootstrap cache files..."
 rm -f bootstrap/cache/*.php
 
+echo "Configuring nginx port..."
+APP_PORT="${PORT:-80}"
+if [ -f /etc/nginx/nginx.conf ]; then
+  sed -i "s/listen 80;/listen ${APP_PORT};/g" /etc/nginx/nginx.conf
+  sed -i "s/listen \[::\]:80;/listen [::]:${APP_PORT};/g" /etc/nginx/nginx.conf
+fi
+
 echo "Waiting for database connection..."
 attempt=1
 max_attempts=60
