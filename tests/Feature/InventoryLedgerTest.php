@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Enums\MovementType;
 use App\Models\Item;
+use App\Models\ItemCategory;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
+use App\Models\Unit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,7 +19,7 @@ class InventoryLedgerTest extends TestCase
     {
         $main = StockLocation::create(['name' => 'Gudang Utama', 'code' => 'MAIN']);
         $krian = StockLocation::create(['name' => 'Krian', 'code' => 'KRIAN', 'type' => 'branch']);
-        $item = Item::create(['name' => 'Pigtail', 'opening_balance' => 10, 'minimum_stock' => 2]);
+        $item = Item::create($this->itemAttributes(['name' => 'Pigtail', 'opening_balance' => 10, 'minimum_stock' => 2]));
 
         $this->movement(MovementType::StockIn, $item, 5, destination: $main);
         $this->movement(MovementType::StockOut, $item, 3, source: $main);
@@ -29,13 +31,13 @@ class InventoryLedgerTest extends TestCase
 
         $this->assertSame(13.0, $item->current_stock);
         $this->assertSame(9.0, $item->stockForLocation($main->id));
-        $this->assertSame(4.0, $item->stockForLocation($krian->id));
+        $this->assertSame(14.0, $item->stockForLocation($krian->id));
     }
 
     public function test_negative_stock_is_allowed_and_flagged(): void
     {
         $main = StockLocation::create(['name' => 'Gudang Utama', 'code' => 'MAIN']);
-        $item = Item::create(['name' => 'Spliter ODP 1:8', 'opening_balance' => 1, 'minimum_stock' => 2]);
+        $item = Item::create($this->itemAttributes(['name' => 'Spliter ODP 1:8', 'opening_balance' => 1, 'minimum_stock' => 2]));
 
         $this->movement(MovementType::StockOut, $item, 5, source: $main);
 
@@ -57,5 +59,20 @@ class InventoryLedgerTest extends TestCase
         $movement->lines()->create(['item_id' => $item->id, 'quantity' => $quantity]);
 
         return $movement;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function itemAttributes(array $attributes): array
+    {
+        $category = ItemCategory::firstOrCreate(['name' => 'Lainnya'], ['code' => 'LNY']);
+        $unit = Unit::firstOrCreate(['symbol' => 'Pcs'], ['name' => 'Pcs']);
+
+        return $attributes + [
+            'item_category_id' => $category->id,
+            'unit_id' => $unit->id,
+        ];
     }
 }

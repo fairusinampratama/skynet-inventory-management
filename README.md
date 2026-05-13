@@ -64,7 +64,7 @@ Open the admin panel at `/admin`.
 - Barang records require name, category, unit, price, opening stock, and minimum stock. Notes remain optional.
 - Movement purposes are categorized by movement type: stock in, stock out, transfer, or adjustment. The Stock Movement form filters purpose options based on the selected movement type.
 - Stock locations support `warehouse`, `branch`, and `field` types. These are currently informational labels and reporting/grouping metadata, not hard movement restrictions.
-- Item import and item aliases are intentionally not used.
+- Excel item import is available through `ExcelInventorySeeder` and is disabled by default unless `SEED_EXCEL_INVENTORY=true`.
 
 To generate codes for legacy items without a code:
 
@@ -125,9 +125,12 @@ QUEUE_CONNECTION=database
 SESSION_DRIVER=database
 FILESYSTEM_DISK=public
 FILAMENT_FILESYSTEM_DISK=public
+SEED_EXCEL_INVENTORY=false
 ```
 
 `deploy.sh` waits for the database, runs migrations, seeds default admin/settings data, creates the storage link, and caches configuration/views.
+
+Set `SEED_EXCEL_INVENTORY=true` only for deployments where the workbook at `Stock Material Skynet NEW (1).xlsx` should overwrite item master fields from Excel. Leave it `false` for normal production deploys after live inventory edits begin.
 
 ## Useful Commands
 

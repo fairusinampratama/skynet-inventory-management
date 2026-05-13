@@ -61,6 +61,10 @@ class DatabaseSeeder extends Seeder
         ] as $oldName => $name) {
             $this->mergeAdjustmentReason($oldName, $name);
         }
+
+        if (config('inventory.seed_excel_inventory')) {
+            $this->call(ExcelInventorySeeder::class);
+        }
     }
 
     private function mergeMovementPurpose(string $oldName, string $name, MovementType $type): void

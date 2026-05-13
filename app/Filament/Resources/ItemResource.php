@@ -20,6 +20,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -60,13 +61,16 @@ class ItemResource extends Resource
             Select::make('unit_id')->label('Satuan')->relationship('unit', 'symbol')->searchable()->preload()->required(),
             TextInput::make('price')
                 ->label('Harga')
-                ->numeric()
                 ->inputMode('decimal')
                 ->prefix('Rp')
+                ->mask(RawJs::make('$money($input, ",", ".", 2)'))
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::normalizeMoneyState($state))
+                ->mutateStateForValidationUsing(fn (mixed $state): ?string => self::normalizeMoneyState($state))
+                ->rule('numeric')
                 ->step('0.01')
-                ->placeholder('0.00')
-                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 2, '.', ''))
-                ->default('0.00')
+                ->placeholder('0,00')
+                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 2, ',', '.'))
+                ->default('0,00')
                 ->required(),
             TextInput::make('opening_balance')
                 ->label('Stok')
@@ -145,5 +149,30 @@ class ItemResource extends Resource
         return [
             'index' => Pages\ManageItems::route('/'),
         ];
+    }
+
+    private static function normalizeMoneyState(mixed $state): ?string
+    {
+        if ($state === null || $state === '') {
+            return null;
+        }
+
+        $state = preg_replace('/[^\d,.-]/', '', (string) $state) ?? '';
+
+        $lastComma = strrpos($state, ',');
+        $lastDot = strrpos($state, '.');
+
+        if (($lastComma !== false) && (($lastDot === false) || ($lastComma > $lastDot))) {
+            $state = str_replace('.', '', $state);
+            $state = str_replace(',', '.', $state);
+        } else {
+            $state = str_replace(',', '', $state);
+
+            if (preg_match('/^\d{1,3}(\.\d{3})+$/', $state)) {
+                $state = str_replace('.', '', $state);
+            }
+        }
+
+        return number_format((float) $state, 2, '.', '');
     }
 }
