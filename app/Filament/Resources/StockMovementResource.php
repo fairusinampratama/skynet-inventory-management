@@ -6,6 +6,7 @@ use App\Enums\MovementType;
 use App\Filament\Resources\StockMovementResource\Pages;
 use App\Models\MovementPurpose;
 use App\Models\StockMovement;
+use App\Support\StockFormatter;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -181,9 +182,9 @@ class StockMovementResource extends Resource
                         ->numeric()
                         ->inputMode('decimal')
                         ->step('0.001')
-                        ->placeholder('0.000')
+                        ->placeholder('0')
                         ->minValue(0.001)
-                        ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 3, '.', ''))
+                        ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : StockFormatter::format($state))
                         ->required(),
                 ])
                 ->columns(2)

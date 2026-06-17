@@ -8,6 +8,7 @@ use App\Models\StockAdjustmentReason;
 use App\Models\StockLocation;
 use App\Services\ItemCodeGenerator;
 use App\Services\StockAdjustmentService;
+use App\Support\StockFormatter;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -83,14 +84,14 @@ class ItemResource extends Resource
                 ->numeric()
                 ->inputMode('decimal')
                 ->step('0.001')
-                ->placeholder('0.000')
-                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 3, '.', ''))
-                ->default('0.000')
+                ->placeholder('0')
+                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : StockFormatter::format($state))
+                ->default('0')
                 ->required()
                 ->visibleOn('create'),
             TextEntry::make('current_stock')
                 ->label('Stok Saat Ini')
-                ->state(fn (?Item $record): string => number_format((float) ($record?->current_stock ?? 0), 3, '.', ''))
+                ->state(fn (?Item $record): string => StockFormatter::format($record?->current_stock ?? 0))
                 ->badge()
                 ->color(fn (?Item $record): string => match ($record?->stock_status) {
                     'Negative', 'Empty' => 'danger',
@@ -103,9 +104,9 @@ class ItemResource extends Resource
                 ->numeric()
                 ->inputMode('decimal')
                 ->step('0.001')
-                ->placeholder('0.000')
-                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 3, '.', ''))
-                ->default('2.000')
+                ->placeholder('0')
+                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : StockFormatter::format($state))
+                ->default('2')
                 ->required(),
             Toggle::make('requires_serial_tracking')->label('Siapkan pelacakan serial')->default(false),
             Toggle::make('is_active')->label('Aktif')->default(true),
@@ -122,7 +123,7 @@ class ItemResource extends Resource
                 TextColumn::make('name')->label('Nama')->searchable()->sortable(),
                 TextColumn::make('category.name')->label('Jenis')->sortable(),
                 TextColumn::make('unit.symbol')->label('Satuan'),
-                TextColumn::make('current_stock')->label('Stok Saat Ini')->numeric(3)->badge()
+                TextColumn::make('current_stock')->label('Stok Saat Ini')->formatStateUsing(fn (mixed $state): string => StockFormatter::format($state))->badge()
                     ->color(fn (Item $record): string => match ($record->stock_status) {
                         'Negative', 'Empty' => 'danger',
                         'Low Stock' => 'warning',
@@ -135,7 +136,7 @@ class ItemResource extends Resource
                         'Low Stock' => 'warning',
                         default => 'success',
                     }),
-                TextColumn::make('minimum_stock')->label('Stok Minimum')->numeric(3)->toggleable(),
+                TextColumn::make('minimum_stock')->label('Stok Minimum')->formatStateUsing(fn (mixed $state): string => StockFormatter::format($state))->toggleable(),
                 TextColumn::make('price')->label('Harga')->money('IDR')->toggleable(),
                 IconColumn::make('requires_serial_tracking')->label('Serial')->boolean()->toggleable(),
                 IconColumn::make('is_active')->label('Aktif')->boolean()->toggleable(),
@@ -181,7 +182,7 @@ class ItemResource extends Resource
                             ->inputMode('decimal')
                             ->step('0.001')
                             ->minValue(0)
-                            ->placeholder('0.000')
+                            ->placeholder('0')
                             ->required(),
                         Select::make('stock_adjustment_reason_id')
                             ->label('Alasan Penyesuaian')
@@ -256,12 +257,12 @@ class ItemResource extends Resource
 
     private static function formatStock(float $stock): string
     {
-        return number_format($stock, 3, '.', '');
+        return StockFormatter::format($stock);
     }
 
     private static function formatSignedStock(float $stock): string
     {
-        return ($stock > 0 ? '+' : '').self::formatStock($stock);
+        return StockFormatter::signed($stock);
     }
 
     private static function normalizeMoneyState(mixed $state): ?string

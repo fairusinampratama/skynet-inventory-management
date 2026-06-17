@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Item;
 use App\Models\StockMovementLine;
+use App\Support\StockFormatter;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InventoryExportController extends Controller
@@ -20,9 +21,9 @@ class InventoryExportController extends Controller
                     $item->name,
                     $item->category?->name,
                     $item->unit?->symbol,
-                    $item->opening_balance,
-                    $item->current_stock,
-                    $item->minimum_stock,
+                    StockFormatter::format($item->opening_balance),
+                    StockFormatter::format($item->current_stock),
+                    StockFormatter::format($item->minimum_stock),
                     $item->stock_status_label,
                 ]);
             });
@@ -48,7 +49,7 @@ class InventoryExportController extends Controller
                         $movement->movement_number,
                         $movement->type->label(),
                         $line->item?->name,
-                        $line->quantity,
+                        StockFormatter::format($line->quantity),
                         $movement->sourceLocation?->name,
                         $movement->destinationLocation?->name,
                         $movement->purpose?->name,

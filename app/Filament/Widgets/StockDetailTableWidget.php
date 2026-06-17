@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Item;
+use App\Support\StockFormatter;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
@@ -22,13 +23,13 @@ class StockDetailTableWidget extends TableWidget
                 TextColumn::make('name')->label('Barang')->searchable(),
                 TextColumn::make('category.name')->label('Jenis/Kategori'),
                 TextColumn::make('unit.symbol')->label('Satuan'),
-                TextColumn::make('computed_current_stock')->label('Stok Saat Ini')->numeric(3)->badge()
+                TextColumn::make('computed_current_stock')->label('Stok Saat Ini')->formatStateUsing(fn (mixed $state): string => StockFormatter::format($state))->badge()
                     ->color(fn (Item $record): string => match ($record->stock_status) {
                         'Negative', 'Empty' => 'danger',
                         'Low Stock' => 'warning',
                         default => 'success',
                     }),
-                TextColumn::make('minimum_stock')->label('Stok Minimum')->numeric(3),
+                TextColumn::make('minimum_stock')->label('Stok Minimum')->formatStateUsing(fn (mixed $state): string => StockFormatter::format($state)),
                 TextColumn::make('stock_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state, Item $record): string => $record->stock_status_label)
                     ->color(fn (string $state): string => match ($state) {
