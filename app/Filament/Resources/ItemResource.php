@@ -4,7 +4,10 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ItemResource\Pages;
 use App\Models\Item;
+use App\Models\StockAdjustmentReason;
+use App\Models\StockLocation;
 use App\Services\ItemCodeGenerator;
+use App\Services\StockAdjustmentService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -17,7 +20,9 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -146,6 +151,92 @@ class ItemResource extends Resource
                 CreateAction::make(),
             ])
             ->recordActions([
+                Action::make('adjustStock')
+                    ->label('Sesuaikan Stok')
+                    ->icon(Heroicon::OutlinedPencilSquare)
+                    ->modalHeading(fn (Item $record): string => "Sesuaikan Stok: {$record->name}")
+                    ->modalSubmitActionLabel('Simpan Penyesuaian')
+                    ->schema([
+                        Select::make('stock_location_id')
+                            ->label('Lokasi')
+                            ->options(fn (): array => StockLocation::query()
+                                ->where('is_active', true)
+                                ->orderBy('name')
+                                ->get()
+                                ->mapWithKeys(fn (StockLocation $location): array => [$location->id => $location->display_name])
+                                ->all())
+                            ->searchable()
+                            ->preload()
+                            ->live()
+                            ->required(),
+                        TextEntry::make('current_location_stock')
+                            ->label('Stok Saat Ini di Lokasi')
+                            ->state(fn (Get $get, Item $record): string => filled($get('stock_location_id'))
+                                ? self::formatStock($record->stockForLocation((int) $get('stock_location_id')))
+                                : '-')
+                            ->badge(),
+                        TextInput::make('actual_stock')
+                            ->label('Stok Aktual')
+                            ->numeric()
+                            ->inputMode('decimal')
+                            ->step('0.001')
+                            ->minValue(0)
+                            ->placeholder('0.000')
+                            ->required(),
+                        Select::make('stock_adjustment_reason_id')
+                            ->label('Alasan Penyesuaian')
+                            ->options(fn (): array => StockAdjustmentReason::query()
+                                ->where('is_active', true)
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all())
+                            ->searchable()
+                            ->preload()
+                            ->required(),
+                        TextInput::make('pic')
+                            ->label('PIC')
+                            ->default(fn (): ?string => auth()->user()?->name)
+                            ->maxLength(255),
+                        Textarea::make('notes')
+                            ->label('Catatan')
+                            ->columnSpanFull(),
+                    ])
+                    ->action(function (array $data, Item $record): void {
+                        $locationId = (int) $data['stock_location_id'];
+                        $actualStock = (float) $data['actual_stock'];
+                        $currentStock = $record->stockForLocation($locationId);
+                        $difference = round($actualStock - $currentStock, 3);
+
+                        $movement = app(StockAdjustmentService::class)->adjustToActualStock(
+                            item: $record,
+                            locationId: $locationId,
+                            actualStock: $actualStock,
+                            reasonId: (int) $data['stock_adjustment_reason_id'],
+                            pic: $data['pic'] ?? null,
+                            notes: $data['notes'] ?? null,
+                        );
+
+                        if (! $movement) {
+                            Notification::make()
+                                ->title('Stok sudah sesuai')
+                                ->body('Tidak ada pergerakan stok yang dibuat.')
+                                ->info()
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Stok berhasil disesuaikan')
+                            ->body(sprintf(
+                                'Stok lokasi berubah dari %s menjadi %s (%s).',
+                                self::formatStock($currentStock),
+                                self::formatStock($actualStock),
+                                self::formatSignedStock($difference),
+                            ))
+                            ->success()
+                            ->send();
+                    }),
                 EditAction::make(),
                 DeleteAction::make()->visible(fn (): bool => auth()->user()?->isAdmin() ?? false),
             ])
@@ -161,6 +252,16 @@ class ItemResource extends Resource
         return [
             'index' => Pages\ManageItems::route('/'),
         ];
+    }
+
+    private static function formatStock(float $stock): string
+    {
+        return number_format($stock, 3, '.', '');
+    }
+
+    private static function formatSignedStock(float $stock): string
+    {
+        return ($stock > 0 ? '+' : '').self::formatStock($stock);
     }
 
     private static function normalizeMoneyState(mixed $state): ?string
