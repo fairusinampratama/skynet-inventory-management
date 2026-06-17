@@ -16,6 +16,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -73,14 +74,25 @@ class ItemResource extends Resource
                 ->default('0,00')
                 ->required(),
             TextInput::make('opening_balance')
-                ->label('Stok')
+                ->label('Stok Awal')
                 ->numeric()
                 ->inputMode('decimal')
                 ->step('0.001')
                 ->placeholder('0.000')
                 ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 3, '.', ''))
                 ->default('0.000')
-                ->required(),
+                ->required()
+                ->visibleOn('create'),
+            TextEntry::make('current_stock')
+                ->label('Stok Saat Ini')
+                ->state(fn (?Item $record): string => number_format((float) ($record?->current_stock ?? 0), 3, '.', ''))
+                ->badge()
+                ->color(fn (?Item $record): string => match ($record?->stock_status) {
+                    'Negative', 'Empty' => 'danger',
+                    'Low Stock' => 'warning',
+                    default => 'success',
+                })
+                ->visibleOn('edit'),
             TextInput::make('minimum_stock')
                 ->label('Stok Minimum')
                 ->numeric()

@@ -30,8 +30,8 @@ class InventoryLedgerTest extends TestCase
         $item->refresh();
 
         $this->assertSame(13.0, $item->current_stock);
-        $this->assertSame(9.0, $item->stockForLocation($main->id));
-        $this->assertSame(14.0, $item->stockForLocation($krian->id));
+        $this->assertSame(-1.0, $item->stockForLocation($main->id));
+        $this->assertSame(4.0, $item->stockForLocation($krian->id));
     }
 
     public function test_negative_stock_is_allowed_and_flagged(): void

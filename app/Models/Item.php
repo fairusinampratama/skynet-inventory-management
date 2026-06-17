@@ -68,7 +68,7 @@ class Item extends Model
 
     public function stockForLocation(?int $locationId = null): float
     {
-        $stock = (float) $this->opening_balance;
+        $stock = $locationId === null ? (float) $this->opening_balance : 0.0;
 
         foreach ($this->movementLines()->with('movement')->get() as $line) {
             $movement = $line->movement;
