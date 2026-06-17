@@ -59,6 +59,12 @@ class StockMovementResource extends Resource
                 ->afterStateUpdated(function (MovementType|string|null $state, Get $get, Set $set): void {
                     $type = $state instanceof MovementType ? $state->value : $state;
 
+                    if ($type === MovementType::Adjustment->value) {
+                        $set('adjustment_direction', null);
+                        $set('source_location_id', null);
+                        $set('destination_location_id', null);
+                    }
+
                     if (! in_array($type, [MovementType::StockOut->value, MovementType::Transfer->value, MovementType::Adjustment->value], true)) {
                         $set('source_location_id', null);
                     }
@@ -79,6 +85,40 @@ class StockMovementResource extends Resource
                         $set('movement_purpose_id', null);
                     }
                 }),
+            Select::make('adjustment_direction')
+                ->label('Tipe Penyesuaian')
+                ->options([
+                    'increase' => 'Tambah Stok',
+                    'decrease' => 'Kurangi Stok',
+                ])
+                ->live()
+                ->dehydrated(false)
+                ->afterStateHydrated(function (Select $component, ?StockMovement $record): void {
+                    if (! $record || $record->type !== MovementType::Adjustment) {
+                        return;
+                    }
+
+                    if ($record->destination_location_id) {
+                        $component->state('increase');
+
+                        return;
+                    }
+
+                    if ($record->source_location_id) {
+                        $component->state('decrease');
+                    }
+                })
+                ->afterStateUpdated(function (?string $state, Set $set): void {
+                    if ($state === 'increase') {
+                        $set('source_location_id', null);
+                    }
+
+                    if ($state === 'decrease') {
+                        $set('destination_location_id', null);
+                    }
+                })
+                ->visible(fn (Get $get): bool => self::movementTypeIs($get, MovementType::Adjustment))
+                ->required(fn (Get $get): bool => self::movementTypeIs($get, MovementType::Adjustment)),
             Select::make('source_location_id')
                 ->label('Lokasi Asal')
                 ->relationship('sourceLocation', 'name')
@@ -90,8 +130,8 @@ class StockMovementResource extends Resource
                         $set('destination_location_id', null);
                     }
                 })
-                ->visible(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockOut, MovementType::Transfer, MovementType::Adjustment))
-                ->required(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockOut, MovementType::Transfer) || (self::movementTypeIs($get, MovementType::Adjustment) && blank($get('destination_location_id'))))
+                ->visible(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockOut, MovementType::Transfer) || self::adjustmentDirectionIs($get, 'decrease'))
+                ->required(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockOut, MovementType::Transfer) || self::adjustmentDirectionIs($get, 'decrease'))
                 ->rule('prohibits:destination_location_id', fn (Get $get): bool => self::movementTypeIs($get, MovementType::Adjustment) && filled($get('source_location_id'))),
             Select::make('destination_location_id')
                 ->label('Lokasi Tujuan')
@@ -104,8 +144,8 @@ class StockMovementResource extends Resource
                         $set('source_location_id', null);
                     }
                 })
-                ->visible(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockIn, MovementType::Transfer, MovementType::Adjustment))
-                ->required(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockIn, MovementType::Transfer) || (self::movementTypeIs($get, MovementType::Adjustment) && blank($get('source_location_id'))))
+                ->visible(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockIn, MovementType::Transfer) || self::adjustmentDirectionIs($get, 'increase'))
+                ->required(fn (Get $get): bool => self::movementTypeIs($get, MovementType::StockIn, MovementType::Transfer) || self::adjustmentDirectionIs($get, 'increase'))
                 ->rule('prohibits:source_location_id', fn (Get $get): bool => self::movementTypeIs($get, MovementType::Adjustment) && filled($get('destination_location_id'))),
             Select::make('movement_purpose_id')
                 ->label('Keperluan')
@@ -210,5 +250,11 @@ class StockMovementResource extends Resource
         }
 
         return false;
+    }
+
+    private static function adjustmentDirectionIs(Get $get, string $direction): bool
+    {
+        return self::movementTypeIs($get, MovementType::Adjustment)
+            && $get('adjustment_direction') === $direction;
     }
 }
