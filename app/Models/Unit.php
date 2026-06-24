@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'symbol', 'is_active'])]
+#[Fillable(['name', 'symbol'])]
 class Unit extends Model
 {
     public function items(): HasMany

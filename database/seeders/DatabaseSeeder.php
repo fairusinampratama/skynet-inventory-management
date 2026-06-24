@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Enums\MovementType;
 use App\Enums\UserRole;
-use App\Models\MovementPurpose;
 use App\Models\StockAdjustmentReason;
 use App\Models\StockLocation;
 use App\Models\Unit;
@@ -32,11 +31,11 @@ class DatabaseSeeder extends Seeder
         $this->seedDefaultItemCategories();
 
         foreach ([['Pcs', 'Pcs'], ['Meter', 'Meter'], ['Roll', 'Roll'], ['Pack', 'Pack']] as [$name, $symbol]) {
-            Unit::firstOrCreate(['symbol' => $symbol], ['name' => $name, 'is_active' => true]);
+            Unit::firstOrCreate(['symbol' => $symbol], ['name' => $name]);
         }
 
-        StockLocation::firstOrCreate(['code' => 'MAIN'], ['name' => 'Gudang Utama', 'type' => 'warehouse', 'is_active' => true]);
-        StockLocation::firstOrCreate(['code' => 'KRIAN'], ['name' => 'Krian', 'type' => 'branch', 'is_active' => true]);
+        StockLocation::firstOrCreate(['code' => 'MAIN'], ['name' => 'Gudang Utama', 'type' => 'warehouse']);
+        StockLocation::firstOrCreate(['code' => 'KRIAN'], ['name' => 'Krian', 'type' => 'branch']);
 
         foreach ([
             'maintenance' => ['Pemeliharaan', MovementType::StockOut],
@@ -47,7 +46,6 @@ class DatabaseSeeder extends Seeder
             'Cab Krian' => ['Cabang Krian', MovementType::Transfer],
             'Migrasi' => ['Migrasi', MovementType::StockIn],
         ] as $oldName => [$name, $type]) {
-            $this->mergeMovementPurpose($oldName, $name, $type);
         }
 
         foreach ([
@@ -67,36 +65,10 @@ class DatabaseSeeder extends Seeder
         }
     }
 
-    private function mergeMovementPurpose(string $oldName, string $name, MovementType $type): void
-    {
-        $canonical = MovementPurpose::firstOrCreate(
-            ['name' => $name],
-            ['type' => $type->value, 'is_active' => true],
-        );
-
-        $canonical->update(['type' => $type->value, 'is_active' => true]);
-
-        if ($oldName === $name) {
-            return;
-        }
-
-        $old = MovementPurpose::where('name', $oldName)->first();
-
-        if (! $old || $old->is($canonical)) {
-            return;
-        }
-
-        DB::table('stock_movements')
-            ->where('movement_purpose_id', $old->id)
-            ->update(['movement_purpose_id' => $canonical->id]);
-
-        $old->delete();
-    }
 
     private function mergeAdjustmentReason(string $oldName, string $name): void
     {
-        $canonical = StockAdjustmentReason::firstOrCreate(['name' => $name], ['is_active' => true]);
-        $canonical->update(['is_active' => true]);
+        $canonical = StockAdjustmentReason::firstOrCreate(['name' => $name]);
 
         if ($oldName === $name) {
             return;

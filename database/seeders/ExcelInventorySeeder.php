@@ -108,16 +108,16 @@ class ExcelInventorySeeder extends Seeder
 
             $category = ItemCategory::firstOrCreate(
                 ['name' => $categoryName],
-                ['code' => $this->categoryCode($categoryName), 'is_active' => true],
+                ['code' => $this->categoryCode($categoryName)],
             );
 
             if (! $category->code && $code = $this->categoryCode($categoryName)) {
-                $category->update(['code' => $code, 'is_active' => true]);
+                $category->update(['code' => $code]);
             }
 
             $unit = Unit::firstOrCreate(
                 ['symbol' => $unitSymbol],
-                ['name' => $unitSymbol, 'is_active' => true],
+                ['name' => $unitSymbol],
             );
 
             $excelCode = $this->clean($row['Column 1'] ?? '');
@@ -142,10 +142,7 @@ class ExcelInventorySeeder extends Seeder
                 'item_category_id' => $category->id,
                 'unit_id' => $unit->id,
                 'price' => $price,
-                'opening_balance' => $stock,
                 'minimum_stock' => 0,
-                'requires_serial_tracking' => false,
-                'is_active' => true,
                 'notes' => $this->notesFor($row, $excelCode, $code),
             ];
 
@@ -153,8 +150,50 @@ class ExcelInventorySeeder extends Seeder
                 $item->update($attributes);
                 $updated++;
             } else {
-                Item::create(['name' => $name] + $attributes);
+                $item = Item::create(['name' => $name] + $attributes);
                 $created++;
+            }
+
+            if ($stock > 0) {
+                $location = \App\Models\StockLocation::firstOrCreate(
+                    ['name' => 'Gudang Utama'],
+                    ['code' => 'MAIN', 'type' => 'warehouse']
+                );
+                
+
+                $movement = \App\Models\StockMovement::create([
+                    'movement_number' => \App\Models\StockMovement::nextMovementNumber() . '-INI-' . $item->id,
+                    'movement_date' => now(),
+                    'type' => \App\Enums\MovementType::StockIn->value,
+                    'destination_location_id' => $location->id,
+                    'notes' => 'Migrasi otomatis stok awal dari Excel.',
+                ]);
+
+                \App\Models\StockMovementLine::create([
+                    'stock_movement_id' => $movement->id,
+                    'item_id' => $item->id,
+                    'quantity' => $stock,
+                ]);
+            } else if ($stock < 0) {
+                $location = \App\Models\StockLocation::firstOrCreate(
+                    ['name' => 'Gudang Utama'],
+                    ['code' => 'MAIN', 'type' => 'warehouse']
+                );
+                
+
+                $movement = \App\Models\StockMovement::create([
+                    'movement_number' => \App\Models\StockMovement::nextMovementNumber() . '-INI-' . $item->id,
+                    'movement_date' => now(),
+                    'type' => \App\Enums\MovementType::StockOut->value,
+                    'source_location_id' => $location->id,
+                    'notes' => 'Migrasi otomatis koreksi minus dari Excel.',
+                ]);
+
+                \App\Models\StockMovementLine::create([
+                    'stock_movement_id' => $movement->id,
+                    'item_id' => $item->id,
+                    'quantity' => abs($stock),
+                ]);
             }
         }
 

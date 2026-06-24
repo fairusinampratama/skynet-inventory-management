@@ -13,7 +13,7 @@ class InventoryExportController extends Controller
     {
         return response()->streamDownload(function (): void {
             $handle = fopen('php://output', 'w');
-            $this->putCsv($handle, ['Kode', 'Barang', 'Jenis', 'Satuan', 'Saldo Awal', 'Stok Saat Ini', 'Stok Minimum', 'Status']);
+            $this->putCsv($handle, ['Kode', 'Barang', 'Kategori', 'Satuan', 'Stok Saat Ini', 'Stok Minimum', 'Status']);
 
             Item::with(['category', 'unit', 'movementLines.movement'])->orderBy('name')->each(function (Item $item) use ($handle): void {
                 $this->putCsv($handle, [
@@ -21,7 +21,6 @@ class InventoryExportController extends Controller
                     $item->name,
                     $item->category?->name,
                     $item->unit?->symbol,
-                    StockFormatter::format($item->opening_balance),
                     StockFormatter::format($item->current_stock),
                     StockFormatter::format($item->minimum_stock),
                     $item->stock_status_label,

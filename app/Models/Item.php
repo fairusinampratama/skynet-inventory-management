@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
-#[Fillable(['code', 'name', 'item_category_id', 'unit_id', 'price', 'opening_balance', 'minimum_stock', 'requires_serial_tracking', 'is_active', 'notes'])]
+#[Fillable(['code', 'name', 'item_category_id', 'unit_id', 'price', 'minimum_stock', 'notes'])]
 class Item extends Model
 {
     use LogsActivity;
@@ -31,10 +31,7 @@ class Item extends Model
     {
         return [
             'price' => 'decimal:2',
-            'opening_balance' => 'decimal:3',
             'minimum_stock' => 'decimal:3',
-            'requires_serial_tracking' => 'boolean',
-            'is_active' => 'boolean',
         ];
     }
 
@@ -63,12 +60,12 @@ class Item extends Model
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->where('is_active', true);
+        return $query;
     }
 
     public function stockForLocation(?int $locationId = null): float
     {
-        $stock = $locationId === null ? (float) $this->opening_balance : 0.0;
+        $stock = 0.0;
 
         foreach ($this->movementLines()->with('movement')->get() as $line) {
             $movement = $line->movement;
@@ -129,5 +126,30 @@ class Item extends Model
             'Low Stock' => 'Stok Menipis',
             default => 'Stok Aman',
         };
+    }
+
+    public function getStockPerLocationAttribute(): array
+    {
+        $stocks = [];
+
+        foreach ($this->movementLines()->with('movement.destinationLocation', 'movement.sourceLocation')->get() as $line) {
+            $movement = $line->movement;
+            if (! $movement) {
+                continue;
+            }
+
+            if ($movement->destination_location_id) {
+                $locName = $movement->destinationLocation?->name ?? 'Unknown';
+                $stocks[$locName] = ($stocks[$locName] ?? 0.0) + (float) $line->quantity;
+            }
+
+            if ($movement->source_location_id) {
+                $locName = $movement->sourceLocation?->name ?? 'Unknown';
+                $stocks[$locName] = ($stocks[$locName] ?? 0.0) - (float) $line->quantity;
+            }
+        }
+
+        // Filter out zero stocks
+        return array_filter($stocks, fn($qty) => round($qty, 3) != 0);
     }
 }

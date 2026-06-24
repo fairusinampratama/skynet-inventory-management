@@ -38,8 +38,10 @@ return new class extends Migration
             $table->dropForeign(['unit_id']);
         });
 
-        DB::statement('ALTER TABLE items MODIFY item_category_id BIGINT UNSIGNED NOT NULL');
-        DB::statement('ALTER TABLE items MODIFY unit_id BIGINT UNSIGNED NOT NULL');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE items MODIFY item_category_id BIGINT UNSIGNED NOT NULL');
+            DB::statement('ALTER TABLE items MODIFY unit_id BIGINT UNSIGNED NOT NULL');
+        }
 
         Schema::table('items', function (Blueprint $table): void {
             $table->foreign('item_category_id')->references('id')->on('item_categories')->restrictOnDelete();
@@ -57,8 +59,10 @@ return new class extends Migration
             $table->dropForeign(['unit_id']);
         });
 
-        DB::statement('ALTER TABLE items MODIFY item_category_id BIGINT UNSIGNED NULL');
-        DB::statement('ALTER TABLE items MODIFY unit_id BIGINT UNSIGNED NULL');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE items MODIFY item_category_id BIGINT UNSIGNED NULL');
+            DB::statement('ALTER TABLE items MODIFY unit_id BIGINT UNSIGNED NULL');
+        }
 
         Schema::table('items', function (Blueprint $table): void {
             $table->foreign('item_category_id')->references('id')->on('item_categories')->nullOnDelete();

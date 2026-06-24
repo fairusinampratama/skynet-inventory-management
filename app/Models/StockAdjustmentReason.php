@@ -5,5 +5,5 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
-#[Fillable(['name', 'is_active'])]
+#[Fillable(['name', 'type'])]
 class StockAdjustmentReason extends Model {}

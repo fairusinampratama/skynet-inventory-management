@@ -38,7 +38,7 @@ class ItemCategoryResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->label('Nama')->required()->maxLength(255)->unique(ignoreRecord: true),
+            TextInput::make('name')->label('Nama')->helperText('Nama kategori (contoh: Kabel, Alat Jaringan, Router).')->required()->maxLength(255)->unique(ignoreRecord: true),
             TextInput::make('code')
                 ->label('Kode')
                 ->helperText('Maksimal 3 karakter, dipakai sebagai prefix kode barang.')
@@ -47,8 +47,8 @@ class ItemCategoryResource extends Resource
                 ->dehydrateStateUsing(fn (?string $state): ?string => filled($state) ? str($state)->upper()->toString() : null)
                 ->formatStateUsing(fn (?string $state): ?string => filled($state) ? str($state)->upper()->toString() : null)
                 ->unique(ignoreRecord: true),
-            Toggle::make('is_active')->label('Aktif')->default(true),
-            Textarea::make('description')->label('Deskripsi')->columnSpanFull(),
+
+            Textarea::make('description')->label('Deskripsi')->helperText('Penjelasan singkat mengenai kategori ini.')->columnSpanFull(),
         ]);
     }
 
@@ -58,7 +58,7 @@ class ItemCategoryResource extends Resource
             ->columns([
                 TextColumn::make('name')->label('Nama')->searchable()->sortable(),
                 TextColumn::make('code')->label('Kode')->badge()->searchable()->sortable(),
-                IconColumn::make('is_active')->label('Aktif')->boolean(),
+
             ])
             ->headerActions([CreateAction::make()])
             ->recordActions([EditAction::make(), DeleteAction::make()]);

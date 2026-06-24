@@ -21,7 +21,8 @@ class InventoryLedgerTest extends TestCase
     {
         $main = StockLocation::create(['name' => 'Gudang Utama', 'code' => 'MAIN']);
         $krian = StockLocation::create(['name' => 'Krian', 'code' => 'KRIAN', 'type' => 'branch']);
-        $item = Item::create($this->itemAttributes(['name' => 'Pigtail', 'opening_balance' => 10, 'minimum_stock' => 2]));
+        $item = Item::create($this->itemAttributes(['name' => 'Pigtail', 'minimum_stock' => 2]));
+        $this->movement(MovementType::StockIn, $item, 10, destination: $main);
 
         $this->movement(MovementType::StockIn, $item, 5, destination: $main);
         $this->movement(MovementType::StockOut, $item, 3, source: $main);
@@ -32,14 +33,15 @@ class InventoryLedgerTest extends TestCase
         $item->refresh();
 
         $this->assertSame(13.0, $item->current_stock);
-        $this->assertSame(-1.0, $item->stockForLocation($main->id));
+        $this->assertSame(9.0, $item->stockForLocation($main->id));
         $this->assertSame(4.0, $item->stockForLocation($krian->id));
     }
 
     public function test_negative_stock_is_allowed_and_flagged(): void
     {
         $main = StockLocation::create(['name' => 'Gudang Utama', 'code' => 'MAIN']);
-        $item = Item::create($this->itemAttributes(['name' => 'Spliter ODP 1:8', 'opening_balance' => 1, 'minimum_stock' => 2]));
+        $item = Item::create($this->itemAttributes(['name' => 'Spliter ODP 1:8', 'minimum_stock' => 2]));
+        $this->movement(MovementType::StockIn, $item, 1, destination: $main);
 
         $this->movement(MovementType::StockOut, $item, 5, source: $main);
 
@@ -52,8 +54,8 @@ class InventoryLedgerTest extends TestCase
     public function test_adjusting_to_actual_stock_creates_positive_adjustment(): void
     {
         $main = StockLocation::create(['name' => 'Gudang Utama', 'code' => 'MAIN']);
-        $item = Item::create($this->itemAttributes(['name' => 'Patchcord', 'opening_balance' => 0, 'minimum_stock' => 2]));
-        $reason = StockAdjustmentReason::create(['name' => 'Opname Stok', 'is_active' => true]);
+        $item = Item::create($this->itemAttributes(['name' => 'Patchcord', 'minimum_stock' => 2]));
+        $reason = StockAdjustmentReason::create(['name' => 'Opname Stok']);
 
         $this->movement(MovementType::StockIn, $item, 10, destination: $main);
 
@@ -83,8 +85,8 @@ class InventoryLedgerTest extends TestCase
     public function test_adjusting_to_actual_stock_creates_negative_adjustment(): void
     {
         $main = StockLocation::create(['name' => 'Gudang Utama', 'code' => 'MAIN']);
-        $item = Item::create($this->itemAttributes(['name' => 'Adaptor', 'opening_balance' => 0, 'minimum_stock' => 2]));
-        $reason = StockAdjustmentReason::create(['name' => 'Koreksi', 'is_active' => true]);
+        $item = Item::create($this->itemAttributes(['name' => 'Adaptor', 'minimum_stock' => 2]));
+        $reason = StockAdjustmentReason::create(['name' => 'Koreksi']);
 
         $this->movement(MovementType::StockIn, $item, 10, destination: $main);
 
@@ -109,8 +111,8 @@ class InventoryLedgerTest extends TestCase
     public function test_adjusting_to_same_actual_stock_does_not_create_movement(): void
     {
         $main = StockLocation::create(['name' => 'Gudang Utama', 'code' => 'MAIN']);
-        $item = Item::create($this->itemAttributes(['name' => 'ONT', 'opening_balance' => 0, 'minimum_stock' => 2]));
-        $reason = StockAdjustmentReason::create(['name' => 'Opname Stok', 'is_active' => true]);
+        $item = Item::create($this->itemAttributes(['name' => 'ONT', 'minimum_stock' => 2]));
+        $reason = StockAdjustmentReason::create(['name' => 'Opname Stok']);
 
         $this->movement(MovementType::StockIn, $item, 10, destination: $main);
 

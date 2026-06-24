@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Enums\MovementType;
 use App\Models\Item;
 use App\Models\ItemCategory;
-use App\Models\MovementPurpose;
 use App\Models\StockAdjustmentReason;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
@@ -34,11 +33,10 @@ class DemoInventorySeeder extends Seeder
             $categories = $this->categories();
             $units = $this->units();
             $locations = $this->locations();
-            $purposes = $this->purposes();
             $reasons = $this->adjustmentReasons();
             $items = $this->items($categories, $units);
 
-            $this->movements($items, $locations, $purposes, $reasons, $admin?->id);
+            $this->movements($items, $locations, $reasons, $admin?->id);
         });
     }
 
@@ -86,7 +84,7 @@ class DemoInventorySeeder extends Seeder
             ->mapWithKeys(fn (array $unit): array => [
                 $unit[1] => Unit::firstOrCreate(
                     ['symbol' => $unit[1]],
-                    ['name' => $unit[0], 'is_active' => true],
+                    ['name' => $unit[0]],
                 ),
             ])
             ->all();
@@ -114,36 +112,7 @@ class DemoInventorySeeder extends Seeder
                         'name' => $location[0],
                         'type' => $location[1],
                         'notes' => $location[2],
-                        'is_active' => true,
                     ],
-                ),
-            ])
-            ->all();
-    }
-
-    /**
-     * @return array<string, MovementPurpose>
-     */
-    private function purposes(): array
-    {
-        $purposes = [
-            'Pemeliharaan' => MovementType::StockOut,
-            'PSB' => MovementType::StockOut,
-            'Pemasangan ODP' => MovementType::StockOut,
-            'Barang Masuk' => MovementType::StockIn,
-            'Stok Krian' => MovementType::Transfer,
-            'Cabang Krian' => MovementType::Transfer,
-            'Migrasi' => MovementType::StockIn,
-            'Perluasan Jaringan' => MovementType::StockOut,
-            'Stok Teknisi' => MovementType::Transfer,
-            'Retur Lapangan' => MovementType::Adjustment,
-        ];
-
-        return collect($purposes)
-            ->mapWithKeys(fn (MovementType $type, string $name): array => [
-                $name => MovementPurpose::updateOrCreate(
-                    ['name' => $name],
-                    ['type' => $type->value, 'is_active' => true],
                 ),
             ])
             ->all();
@@ -154,13 +123,19 @@ class DemoInventorySeeder extends Seeder
      */
     private function adjustmentReasons(): array
     {
-        $names = ['Opname Stok', 'Koreksi', 'Rusak', 'Hilang', 'Pembersihan Data'];
+        $reasons = [
+            'Opname Stok' => 'Audit',
+            'Koreksi' => 'Lainnya',
+            'Rusak' => 'Pengurangan',
+            'Hilang' => 'Pengurangan',
+            'Pembersihan Data' => 'Lainnya',
+        ];
 
-        return collect($names)
-            ->mapWithKeys(fn (string $name): array => [
+        return collect($reasons)
+            ->mapWithKeys(fn (string $type, string $name): array => [
                 $name => StockAdjustmentReason::firstOrCreate(
                     ['name' => $name],
-                    ['is_active' => true],
+                    ['type' => $type],
                 ),
             ])
             ->all();
@@ -242,10 +217,7 @@ class DemoInventorySeeder extends Seeder
                     'item_category_id' => $categories[$item[2]]->id,
                     'unit_id' => $units[$item[3]]->id,
                     'price' => $item[4],
-                    'opening_balance' => 0,
                     'minimum_stock' => $item[5],
-                    'requires_serial_tracking' => $item[6],
-                    'is_active' => true,
                     'notes' => 'Barang demo untuk latihan operasional gudang ISP.',
                 ]);
 
@@ -257,29 +229,27 @@ class DemoInventorySeeder extends Seeder
     /**
      * @param  array<string, Item>  $items
      * @param  array<string, StockLocation>  $locations
-     * @param  array<string, MovementPurpose>  $purposes
      * @param  array<string, StockAdjustmentReason>  $reasons
      */
-    private function movements(array $items, array $locations, array $purposes, array $reasons, ?int $createdBy): void
+    private function movements(array $items, array $locations, array $reasons, ?int $createdBy): void
     {
         $baseDate = CarbonImmutable::now()->subDays(90);
 
-        $this->seedOpeningStock($items, $locations, $purposes, $reasons, $createdBy, $baseDate);
-        $this->seedSupplierRestocks($items, $locations, $purposes, $reasons, $createdBy, $baseDate);
-        $this->seedBranchTransfers($items, $locations, $purposes, $reasons, $createdBy, $baseDate);
-        $this->seedDailyUsage($items, $locations, $purposes, $reasons, $createdBy, $baseDate);
-        $this->seedAdjustments($items, $locations, $purposes, $reasons, $createdBy, $baseDate);
+        $this->seedOpeningStock($items, $locations, $reasons, $createdBy, $baseDate);
+        $this->seedSupplierRestocks($items, $locations, $reasons, $createdBy, $baseDate);
+        $this->seedBranchTransfers($items, $locations, $reasons, $createdBy, $baseDate);
+        $this->seedDailyUsage($items, $locations, $reasons, $createdBy, $baseDate);
+        $this->seedAdjustments($items, $locations, $reasons, $createdBy, $baseDate);
     }
 
     /**
      * @param  array<string, Item>  $items
      * @param  array<string, StockLocation>  $locations
-     * @param  array<string, MovementPurpose>  $purposes
      * @param  array<string, StockAdjustmentReason>  $reasons
      */
-    private function seedOpeningStock(array $items, array $locations, array $purposes, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
+    private function seedOpeningStock(array $items, array $locations, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
     {
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '001', $baseDate->addDays(1), MovementType::StockIn, null, 'MAIN', 'Migrasi', null, 'Skynet Admin', 'Saldo awal demo untuk kabel distribusi dan feeder.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '001', $baseDate->addDays(1), MovementType::StockIn, null, 'MAIN', null, 'Skynet Admin', 'Saldo awal demo untuk kabel distribusi dan feeder.', [
             'IKR-0001' => 7200,
             'DST-0001' => 4000,
             'DST-0002' => 3500,
@@ -291,7 +261,7 @@ class DemoInventorySeeder extends Seeder
             'DST-0007' => 1800,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '002', $baseDate->addDays(2), MovementType::StockIn, null, 'MAIN', 'Migrasi', null, 'Operator Gudang', 'Saldo awal demo untuk ODP, splitter, closure, dan aksesoris FO.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '002', $baseDate->addDays(2), MovementType::StockIn, null, 'MAIN', null, 'Operator Gudang', 'Saldo awal demo untuk ODP, splitter, closure, dan aksesoris FO.', [
             'AKS-0001' => 160,
             'AKS-0002' => 180,
             'AKS-0003' => 320,
@@ -312,7 +282,7 @@ class DemoInventorySeeder extends Seeder
             'FDR-0006' => 5,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '003', $baseDate->addDays(3), MovementType::StockIn, null, 'MAIN', 'Migrasi', null, 'Operator Gudang', 'Saldo awal demo untuk ONT, router, LAN, alat, dan bahan habis pakai.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '003', $baseDate->addDays(3), MovementType::StockIn, null, 'MAIN', null, 'Operator Gudang', 'Saldo awal demo untuk ONT, router, LAN, alat, dan bahan habis pakai.', [
             'ONT-0001' => 80,
             'ONT-0002' => 58,
             'ONT-0003' => 18,
@@ -345,12 +315,11 @@ class DemoInventorySeeder extends Seeder
     /**
      * @param  array<string, Item>  $items
      * @param  array<string, StockLocation>  $locations
-     * @param  array<string, MovementPurpose>  $purposes
      * @param  array<string, StockAdjustmentReason>  $reasons
      */
-    private function seedSupplierRestocks(array $items, array $locations, array $purposes, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
+    private function seedSupplierRestocks(array $items, array $locations, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
     {
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '010', $baseDate->addDays(9), MovementType::StockIn, null, 'MAIN', 'Barang Masuk', null, 'Rina Gudang', 'Restock kabel dan aksesoris dari supplier Surabaya.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '010', $baseDate->addDays(9), MovementType::StockIn, null, 'MAIN', null, 'Rina Gudang', 'Restock kabel dan aksesoris dari supplier Surabaya.', [
             'FDR-0001' => 2000,
             'FDR-0002' => 1200,
             'IKR-0002' => 2400,
@@ -359,7 +328,7 @@ class DemoInventorySeeder extends Seeder
             'AKS-0019' => 140,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '011', $baseDate->addDays(18), MovementType::StockIn, null, 'MAIN', 'Barang Masuk', null, 'Maya Purchasing', 'Kiriman ONT, router, dan aksesoris untuk target PSB bulanan.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '011', $baseDate->addDays(18), MovementType::StockIn, null, 'MAIN', null, 'Maya Purchasing', 'Kiriman ONT, router, dan aksesoris untuk target PSB bulanan.', [
             'ONT-0001' => 45,
             'ONT-0002' => 35,
             'ONT-0004' => 12,
@@ -369,7 +338,7 @@ class DemoInventorySeeder extends Seeder
             'AKS-0016' => 50,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '012', $baseDate->addDays(33), MovementType::StockIn, null, 'MAIN', 'Barang Masuk', null, 'Rina Gudang', 'Restock ODP dan closure untuk perluasan jaringan area barat.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '012', $baseDate->addDays(33), MovementType::StockIn, null, 'MAIN', null, 'Rina Gudang', 'Restock ODP dan closure untuk perluasan jaringan area barat.', [
             'DST-0003' => 16,
             'DST-0004' => 8,
             'DST-0005' => 5,
@@ -378,7 +347,7 @@ class DemoInventorySeeder extends Seeder
             'FDR-0006' => 3,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '013', $baseDate->addDays(47), MovementType::StockIn, null, 'MAIN', 'Barang Masuk', null, 'Dimas Gudang', 'Pembelian bahan habis pakai untuk stok teknisi.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '013', $baseDate->addDays(47), MovementType::StockIn, null, 'MAIN', null, 'Dimas Gudang', 'Pembelian bahan habis pakai untuk stok teknisi.', [
             'BHP-0001' => 12,
             'BHP-0002' => 15,
             'BHP-0003' => 6,
@@ -391,12 +360,11 @@ class DemoInventorySeeder extends Seeder
     /**
      * @param  array<string, Item>  $items
      * @param  array<string, StockLocation>  $locations
-     * @param  array<string, MovementPurpose>  $purposes
      * @param  array<string, StockAdjustmentReason>  $reasons
      */
-    private function seedBranchTransfers(array $items, array $locations, array $purposes, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
+    private function seedBranchTransfers(array $items, array $locations, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
     {
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '020', $baseDate->addDays(20), MovementType::Transfer, 'MAIN', 'KRIAN', 'Stok Krian', null, 'Agus Krian', 'Alokasi rutin untuk cabang Krian.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '020', $baseDate->addDays(20), MovementType::Transfer, 'MAIN', 'KRIAN', null, 'Agus Krian', 'Alokasi rutin untuk cabang Krian.', [
             'IKR-0001' => 700,
             'FDR-0001' => 900,
             'IKR-0002' => 650,
@@ -408,7 +376,7 @@ class DemoInventorySeeder extends Seeder
             'AKS-0018' => 100,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '021', $baseDate->addDays(31), MovementType::Transfer, 'MAIN', 'SDA', 'PSB', null, 'Budi Sidoarjo', 'Alokasi demo untuk cabang Sidoarjo.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '021', $baseDate->addDays(31), MovementType::Transfer, 'MAIN', 'SDA', null, 'Budi Sidoarjo', 'Alokasi demo untuk cabang Sidoarjo.', [
             'DST-0002' => 500,
             'IKR-0001' => 700,
             'DST-0003' => 4,
@@ -418,7 +386,7 @@ class DemoInventorySeeder extends Seeder
             'IKR-0003' => 500,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '022', $baseDate->addDays(44), MovementType::Transfer, 'MAIN', 'SBYB', 'Perluasan Jaringan', null, 'Dewi Barat', 'Alokasi demo untuk cabang Surabaya Barat.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '022', $baseDate->addDays(44), MovementType::Transfer, 'MAIN', 'SBYB', null, 'Dewi Barat', 'Alokasi demo untuk cabang Surabaya Barat.', [
             'FDR-0001' => 650,
             'IKR-0001' => 650,
             'DST-0004' => 3,
@@ -428,7 +396,7 @@ class DemoInventorySeeder extends Seeder
             'IKR-0003' => 450,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '023', $baseDate->addDays(58), MovementType::Transfer, 'MAIN', 'GRS', 'Perluasan Jaringan', null, 'Fajar Gresik', 'Alokasi feeder dan ODP untuk area Gresik.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '023', $baseDate->addDays(58), MovementType::Transfer, 'MAIN', 'GRS', null, 'Fajar Gresik', 'Alokasi feeder dan ODP untuk area Gresik.', [
             'FDR-0002' => 500,
             'FDR-0004' => 300,
             'DST-0005' => 3,
@@ -437,7 +405,7 @@ class DemoInventorySeeder extends Seeder
             'FDR-0009' => 4,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '024', $baseDate->addDays(64), MovementType::Transfer, 'MAIN', 'FIELD', 'Stok Teknisi', null, 'Koordinator Teknisi', 'Stok pegangan teknisi untuk pekerjaan PSB minggu berjalan.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '024', $baseDate->addDays(64), MovementType::Transfer, 'MAIN', 'FIELD', null, 'Koordinator Teknisi', 'Stok pegangan teknisi untuk pekerjaan PSB minggu berjalan.', [
             'IKR-0001' => 900,
             'AKS-0003' => 80,
             'AKS-0004' => 50,
@@ -451,10 +419,9 @@ class DemoInventorySeeder extends Seeder
     /**
      * @param  array<string, Item>  $items
      * @param  array<string, StockLocation>  $locations
-     * @param  array<string, MovementPurpose>  $purposes
      * @param  array<string, StockAdjustmentReason>  $reasons
      */
-    private function seedDailyUsage(array $items, array $locations, array $purposes, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
+    private function seedDailyUsage(array $items, array $locations, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
     {
         $stockOuts = [
             ['030', 24, 'MAIN', 'PSB', 'Andi Pratama', 'PSB cluster Menganti.', ['IKR-0001' => 380, 'AKS-0003' => 18, 'AKS-0004' => 18, 'ONT-0001' => 12, 'AKS-0013' => 12, 'IKR-0003' => 180, 'AKS-0015' => 12]],
@@ -473,38 +440,37 @@ class DemoInventorySeeder extends Seeder
         ];
 
         foreach ($stockOuts as [$number, $day, $source, $purpose, $pic, $notes, $lines]) {
-            $this->movement($items, $locations, $purposes, $reasons, $createdBy, $number, $baseDate->addDays($day), MovementType::StockOut, $source, null, $purpose, null, $pic, $notes, $lines);
+            $this->movement($items, $locations, $reasons, $createdBy, $number, $baseDate->addDays($day), MovementType::StockOut, $source, null, null, $pic, $notes, $lines);
         }
     }
 
     /**
      * @param  array<string, Item>  $items
      * @param  array<string, StockLocation>  $locations
-     * @param  array<string, MovementPurpose>  $purposes
      * @param  array<string, StockAdjustmentReason>  $reasons
      */
-    private function seedAdjustments(array $items, array $locations, array $purposes, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
+    private function seedAdjustments(array $items, array $locations, array $reasons, ?int $createdBy, CarbonImmutable $baseDate): void
     {
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '050', $baseDate->addDays(72), MovementType::Adjustment, 'MAIN', null, 'Pemeliharaan', 'Rusak', 'Rina Gudang', 'Barang rusak ditemukan saat pengecekan gudang.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '050', $baseDate->addDays(72), MovementType::Adjustment, 'MAIN', null, 'Rusak', 'Rina Gudang', 'Barang rusak ditemukan saat pengecekan gudang.', [
             'AKS-0001' => 6,
             'BHP-0001' => 2,
             'AKS-0013' => 4,
             'BHP-0006' => 2,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '051', $baseDate->addDays(78), MovementType::Adjustment, null, 'MAIN', 'Pemeliharaan', 'Opname Stok', 'Rina Gudang', 'Opname stok menemukan tambahan aksesoris dan bahan habis pakai.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '051', $baseDate->addDays(78), MovementType::Adjustment, null, 'MAIN', 'Opname Stok', 'Rina Gudang', 'Opname stok menemukan tambahan aksesoris dan bahan habis pakai.', [
             'AKS-0002' => 9,
             'BHP-0002' => 2,
             'BHP-0005' => 4,
             'BHP-0003' => 1,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '052', $baseDate->addDays(85), MovementType::Adjustment, 'KRIAN', null, 'Pemeliharaan', 'Hilang', 'Agus Krian', 'Selisih opname stok cabang Krian.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '052', $baseDate->addDays(85), MovementType::Adjustment, 'KRIAN', null, 'Hilang', 'Agus Krian', 'Selisih opname stok cabang Krian.', [
             'AKS-0018' => 14,
             'AKS-0013' => 3,
         ]);
 
-        $this->movement($items, $locations, $purposes, $reasons, $createdBy, '053', $baseDate->addDays(88), MovementType::Adjustment, null, 'MAIN', 'Retur Lapangan', 'Koreksi', 'Dimas Gudang', 'Retur perangkat dari teknisi setelah pekerjaan dibatalkan.', [
+        $this->movement($items, $locations, $reasons, $createdBy, '053', $baseDate->addDays(88), MovementType::Adjustment, null, 'MAIN', 'Koreksi', 'Dimas Gudang', 'Retur perangkat dari teknisi setelah pekerjaan dibatalkan.', [
             'ONT-0004' => 3,
             'AKS-0003' => 12,
             'AKS-0015' => 8,
@@ -514,14 +480,12 @@ class DemoInventorySeeder extends Seeder
     /**
      * @param  array<string, Item>  $items
      * @param  array<string, StockLocation>  $locations
-     * @param  array<string, MovementPurpose>  $purposes
      * @param  array<string, StockAdjustmentReason>  $reasons
      * @param  array<string, int|float>  $lines
      */
     private function movement(
         array $items,
         array $locations,
-        array $purposes,
         array $reasons,
         ?int $createdBy,
         string $number,
@@ -529,7 +493,6 @@ class DemoInventorySeeder extends Seeder
         MovementType $type,
         ?string $source,
         ?string $destination,
-        ?string $purpose,
         ?string $reason,
         string $pic,
         string $notes,
@@ -541,7 +504,6 @@ class DemoInventorySeeder extends Seeder
             'type' => $type,
             'source_location_id' => $source ? $locations[$source]->id : null,
             'destination_location_id' => $destination ? $locations[$destination]->id : null,
-            'movement_purpose_id' => $purpose ? $purposes[$purpose]->id : null,
             'stock_adjustment_reason_id' => $reason ? $reasons[$reason]->id : null,
             'pic' => $pic,
             'notes' => $notes,

@@ -30,8 +30,11 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ItemResource extends Resource
 {
@@ -56,21 +59,38 @@ class ItemResource extends Resource
                 ->dehydrated()
                 ->maxLength(255)
                 ->unique(ignoreRecord: true),
-            TextInput::make('name')->label('Nama')->required()->maxLength(255)->unique(ignoreRecord: true),
+            TextInput::make('name')->label('Nama')->helperText('Nama lengkap barang yang akan disimpan.')->required()->maxLength(255)->unique(ignoreRecord: true),
             Select::make('item_category_id')
-                ->label('Jenis')
+                ->label('Kategori')
+                ->helperText('Pilih kategori pengelompokan barang.')
                 ->relationship('category', 'name')
                 ->searchable()
                 ->preload()
                 ->required()
+                ->createOptionForm([
+                    TextInput::make('name')->label('Nama')->required(),
+                    TextInput::make('code')->label('Kode'),
+                    Textarea::make('description')->label('Deskripsi'),
+                ])
                 ->live()
                 ->afterStateUpdated(fn (?int $state, Set $set): mixed => $set('code', app(ItemCodeGenerator::class)->generateForCategoryId($state))),
-            Select::make('unit_id')->label('Satuan')->relationship('unit', 'symbol')->searchable()->preload()->required(),
+            Select::make('unit_id')
+                ->label('Satuan')
+                ->helperText('Satuan ukur barang (misal: Pcs, Roll, Meter).')
+                ->relationship('unit', 'symbol')
+                ->searchable()
+                ->preload()
+                ->required()
+                ->createOptionForm([
+                    TextInput::make('name')->label('Nama Satuan')->required(),
+                    TextInput::make('symbol')->label('Simbol')->required(),
+                ]),
             TextInput::make('price')
                 ->label('Harga')
+                ->helperText('Harga acuan untuk satu satuan barang.')
                 ->inputMode('decimal')
                 ->prefix('Rp')
-                ->mask(RawJs::make('$money($input, ",", ".", 2)'))
+                ->mask(RawJs::make('$money($input, \',\', \'.\', 2)'))
                 ->dehydrateStateUsing(fn (mixed $state): ?string => self::normalizeMoneyState($state))
                 ->mutateStateForValidationUsing(fn (mixed $state): ?string => self::normalizeMoneyState($state))
                 ->rule('numeric')
@@ -79,28 +99,33 @@ class ItemResource extends Resource
                 ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : number_format((float) $state, 2, ',', '.'))
                 ->default('0,00')
                 ->required(),
-            TextInput::make('opening_balance')
-                ->label('Stok Awal')
-                ->numeric()
-                ->inputMode('decimal')
-                ->step('0.001')
-                ->placeholder('0')
-                ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : StockFormatter::format($state))
-                ->default('0')
-                ->required()
-                ->visibleOn('create'),
-            TextEntry::make('current_stock')
-                ->label('Stok Saat Ini')
-                ->state(fn (?Item $record): string => StockFormatter::format($record?->current_stock ?? 0))
-                ->badge()
-                ->color(fn (?Item $record): string => match ($record?->stock_status) {
-                    'Negative', 'Empty' => 'danger',
-                    'Low Stock' => 'warning',
-                    default => 'success',
+
+            \Filament\Forms\Components\Placeholder::make('current_stock')
+                ->label('Total Stok')
+                ->helperText('Jumlah total stok barang saat ini.')
+                ->content(fn (?Item $record): string => StockFormatter::format($record?->current_stock ?? 0) . ($record?->unit ? " {$record->unit->symbol}" : ''))
+                ->visibleOn('edit'),
+            \Filament\Forms\Components\Placeholder::make('stock_per_location')
+                ->label('Detail Stok Per Lokasi')
+                ->helperText('Distribusi riil barang di seluruh lokasi (Otomatis).')
+                ->content(function (?Item $record) {
+                    if (!$record) return '-';
+                    $stocks = $record->stock_per_location;
+                    if (empty($stocks)) return 'Belum ada stok';
+                    
+                    $unitText = $record->unit ? " {$record->unit->symbol}" : '';
+                    $html = '<ul class="list-disc pl-4 space-y-1">';
+                    foreach ($stocks as $name => $qty) {
+                        $safeName = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+                        $html .= "<li><strong>{$safeName}</strong>: " . StockFormatter::format($qty) . $unitText . "</li>";
+                    }
+                    $html .= '</ul>';
+                    return new \Illuminate\Support\HtmlString($html);
                 })
                 ->visibleOn('edit'),
             TextInput::make('minimum_stock')
                 ->label('Stok Minimum')
+                ->helperText('Batas peringatan untuk stok rendah. Jika stok mencapai angka ini, sistem akan menampilkan peringatan kuning.')
                 ->numeric()
                 ->inputMode('decimal')
                 ->step('0.001')
@@ -108,9 +133,8 @@ class ItemResource extends Resource
                 ->formatStateUsing(fn (mixed $state): ?string => $state === null ? null : StockFormatter::format($state))
                 ->default('2')
                 ->required(),
-            Toggle::make('requires_serial_tracking')->label('Siapkan pelacakan serial')->default(false),
-            Toggle::make('is_active')->label('Aktif')->default(true),
-            Textarea::make('notes')->label('Catatan')->columnSpanFull(),
+
+            Textarea::make('notes')->label('Catatan')->helperText('Informasi tambahan lainnya tentang barang ini.')->columnSpanFull(),
         ]);
     }
 
@@ -121,13 +145,49 @@ class ItemResource extends Resource
             ->columns([
                 TextColumn::make('code')->label('Kode')->searchable()->sortable(),
                 TextColumn::make('name')->label('Nama')->searchable()->sortable(),
-                TextColumn::make('category.name')->label('Jenis')->sortable(),
+                TextColumn::make('category.name')->label('Kategori')->sortable(),
                 TextColumn::make('unit.symbol')->label('Satuan'),
-                TextColumn::make('current_stock')->label('Stok Saat Ini')->formatStateUsing(fn (mixed $state): string => StockFormatter::format($state))->badge()
-                    ->color(fn (Item $record): string => match ($record->stock_status) {
-                        'Negative', 'Empty' => 'danger',
-                        'Low Stock' => 'warning',
-                        default => 'success',
+                TextColumn::make('stock_per_location_list')
+                    ->label('Stok Per Lokasi')
+                    ->state(function (Item $record, \Livewire\Component $livewire) {
+                        $locationId = data_get($livewire->tableFilters, 'location.value');
+                        $unitText = $record->unit ? " {$record->unit->symbol}" : '';
+
+                        // If a location filter is active, show only that location's stock
+                        if ($locationId) {
+                            $location = \App\Models\StockLocation::find($locationId);
+                            $qty = $record->stockForLocation((int) $locationId);
+                            return [$location?->name . ': ' . StockFormatter::format($qty) . $unitText];
+                        }
+
+                        // Otherwise show all locations
+                        $stocks = $record->stock_per_location;
+                        $list = [];
+                        foreach ($stocks as $name => $qty) {
+                            $list[] = "{$name}: " . StockFormatter::format($qty) . $unitText;
+                        }
+                        return empty($list) ? ['Kosong'] : $list;
+                    })
+                    ->listWithLineBreaks()
+                    ->bulleted(),
+                TextColumn::make('current_stock')
+                    ->label(fn (\Livewire\Component $livewire): string => data_get($livewire->tableFilters, 'location.value')
+                        ? 'Stok di Lokasi'
+                        : 'Total Stok'
+                    )
+                    ->state(function (Item $record, \Livewire\Component $livewire): float {
+                        $locationId = data_get($livewire->tableFilters, 'location.value');
+                        return $locationId ? $record->stockForLocation((int) $locationId) : $record->current_stock;
+                    })
+                    ->formatStateUsing(fn (mixed $state, Item $record): string => StockFormatter::format($state) . ($record->unit ? " {$record->unit->symbol}" : ''))
+                    ->badge()
+                    ->color(function (Item $record, \Livewire\Component $livewire): string {
+                        $locationId = data_get($livewire->tableFilters, 'location.value');
+                        $stock = $locationId ? $record->stockForLocation((int) $locationId) : $record->current_stock;
+                        if ($stock < 0) return 'danger';
+                        if ($stock == 0) return 'danger';
+                        if ($stock <= (float) $record->minimum_stock) return 'warning';
+                        return 'success';
                     }),
                 TextColumn::make('stock_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state, Item $record): string => $record->stock_status_label)
@@ -138,11 +198,80 @@ class ItemResource extends Resource
                     }),
                 TextColumn::make('minimum_stock')->label('Stok Minimum')->formatStateUsing(fn (mixed $state): string => StockFormatter::format($state))->toggleable(),
                 TextColumn::make('price')->label('Harga')->money('IDR')->toggleable(),
-                IconColumn::make('requires_serial_tracking')->label('Serial')->boolean()->toggleable(),
-                IconColumn::make('is_active')->label('Aktif')->boolean()->toggleable(),
+
             ])
             ->filters([
-                SelectFilter::make('item_category_id')->relationship('category', 'name')->label('Jenis'),
+                SelectFilter::make('item_category_id')
+                    ->relationship('category', 'name')
+                    ->label('Kategori')
+                    ->searchable()
+                    ->preload(),
+                SelectFilter::make('unit_id')
+                    ->relationship('unit', 'symbol')
+                    ->label('Satuan')
+                    ->searchable()
+                    ->preload(),
+                SelectFilter::make('stock_status')
+                    ->label('Status Stok')
+                    ->options([
+                        'negative' => 'Stok Minus',
+                        'empty'    => 'Kosong',
+                        'low'      => 'Stok Menipis',
+                        'ok'       => 'Stok Aman',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $status = $data['value'] ?? null;
+                        if (! $status) {
+                            return $query;
+                        }
+
+                        $stockSql = self::currentStockSubquery();
+
+                        return match ($status) {
+                            'negative' => $query->whereRaw("({$stockSql}) < 0"),
+                            'empty'    => $query->whereRaw("({$stockSql}) = 0"),
+                            'low'      => $query->whereRaw("({$stockSql}) > 0 AND ({$stockSql}) <= items.minimum_stock"),
+                            'ok'       => $query->whereRaw("({$stockSql}) > items.minimum_stock"),
+                            default    => $query,
+                        };
+                    }),
+                TernaryFilter::make('needs_reorder')
+                    ->label('Perlu Reorder')
+                    ->trueLabel('Ya (Stok ≤ Minimum)')
+                    ->falseLabel('Tidak')
+                    ->queries(
+                        true: fn (Builder $q) => $q->whereRaw('(' . self::currentStockSubquery() . ') > 0')
+                            ->whereRaw('(' . self::currentStockSubquery() . ') <= items.minimum_stock'),
+                        false: fn (Builder $q) => $q->whereRaw('(' . self::currentStockSubquery() . ') > items.minimum_stock
+                            OR (' . self::currentStockSubquery() . ') <= 0'),
+                    ),
+                SelectFilter::make('location')
+                    ->label('Gudang / Lokasi')
+                    ->options(fn (): array => \App\Models\StockLocation::orderBy('name')->pluck('name', 'id')->all())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $locationId = $data['value'] ?? null;
+                        if (! $locationId) {
+                            return $query;
+                        }
+
+                        // Only show items that have stock > 0 at this location
+                        return $query->whereRaw('
+                            coalesce((
+                                select sum(
+                                    case
+                                        when sm.destination_location_id = ? then sml.quantity
+                                        when sm.source_location_id = ? then -sml.quantity
+                                        else 0
+                                    end
+                                )
+                                from stock_movement_lines sml
+                                inner join stock_movements sm on sm.id = sml.stock_movement_id
+                                where sml.item_id = items.id
+                            ), 0) > 0
+                        ', [$locationId, $locationId]);
+                    })
+                    ->searchable()
+                    ->preload(),
             ])
             ->headerActions([
                 Action::make('exportCurrentStock')
@@ -154,30 +283,32 @@ class ItemResource extends Resource
             ->recordActions([
                 Action::make('adjustStock')
                     ->label('Sesuaikan Stok')
-                    ->icon(Heroicon::OutlinedPencilSquare)
+                    ->modalDescription('Gunakan fitur ini untuk menyelaraskan stok fisik di lokasi dengan sistem (misal: saat opname, hilang, atau rusak).')
+                    ->icon('heroicon-o-adjustments-horizontal')
                     ->modalHeading(fn (Item $record): string => "Sesuaikan Stok: {$record->name}")
                     ->modalSubmitActionLabel('Simpan Penyesuaian')
                     ->schema([
                         Select::make('stock_location_id')
                             ->label('Lokasi')
-                            ->options(fn (): array => StockLocation::query()
-                                ->where('is_active', true)
+                            ->helperText('Pilih gudang atau lokasi tempat penyesuaian stok dilakukan.')
+                            ->options(fn (): array => \App\Models\StockLocation::query()
                                 ->orderBy('name')
                                 ->get()
-                                ->mapWithKeys(fn (StockLocation $location): array => [$location->id => $location->display_name])
+                                ->mapWithKeys(fn (\App\Models\StockLocation $location): array => [$location->id => $location->display_name])
                                 ->all())
                             ->searchable()
                             ->preload()
                             ->live()
                             ->required(),
-                        TextEntry::make('current_location_stock')
+                        \Filament\Forms\Components\Placeholder::make('current_location_stock')
                             ->label('Stok Saat Ini di Lokasi')
-                            ->state(fn (Get $get, Item $record): string => filled($get('stock_location_id'))
+                            ->helperText('Jumlah stok yang tercatat di sistem saat ini untuk lokasi yang dipilih.')
+                            ->content(fn ($get, Item $record): string => filled($get('stock_location_id'))
                                 ? self::formatStock($record->stockForLocation((int) $get('stock_location_id')))
-                                : '-')
-                            ->badge(),
+                                : '-'),
                         TextInput::make('actual_stock')
                             ->label('Stok Aktual')
+                            ->helperText('Masukkan jumlah fisik riil barang yang baru saja Anda hitung di lokasi.')
                             ->numeric()
                             ->inputMode('decimal')
                             ->step('0.001')
@@ -186,20 +317,24 @@ class ItemResource extends Resource
                             ->required(),
                         Select::make('stock_adjustment_reason_id')
                             ->label('Alasan Penyesuaian')
-                            ->options(fn (): array => StockAdjustmentReason::query()
-                                ->where('is_active', true)
+                            ->helperText('Pilih alasan mengapa stok ini disesuaikan (misal: audit, hilang, rusak).')
+                            ->options(fn (): array => \App\Models\StockAdjustmentReason::query()
                                 ->orderBy('name')
-                                ->pluck('name', 'id')
-                                ->all())
+                                ->get()
+                                ->groupBy('type')
+                                ->map(fn ($items) => $items->pluck('name', 'id'))
+                                ->toArray())
                             ->searchable()
                             ->preload()
                             ->required(),
                         TextInput::make('pic')
                             ->label('PIC')
+                            ->helperText('Penanggung jawab lapangan (otomatis terisi nama Anda).')
                             ->default(fn (): ?string => auth()->user()?->name)
                             ->maxLength(255),
                         Textarea::make('notes')
                             ->label('Catatan')
+                            ->helperText('Keterangan opsional mengenai penyesuaian ini.')
                             ->columnSpanFull(),
                     ])
                     ->action(function (array $data, Item $record): void {
@@ -238,12 +373,49 @@ class ItemResource extends Resource
                             ->success()
                             ->send();
                     }),
-                EditAction::make(),
-                DeleteAction::make()->visible(fn (): bool => auth()->user()?->isAdmin() ?? false),
+                EditAction::make()
+                    ->modalDescription('Ubah detail informasi barang. Pastikan data barang sudah sesuai.'),
+                DeleteAction::make()
+                    ->visible(fn (): bool => auth()->user()?->isAdmin() ?? false)
+                    ->before(function (DeleteAction $action, \App\Models\Item $record) {
+                        if ($record->movementLines()->exists()) {
+                            \Filament\Notifications\Notification::make()
+                                ->danger()
+                                ->title('Gagal Menghapus')
+                                ->body('Barang ini tidak dapat dihapus karena sudah memiliki riwayat pergerakan stok. Penghapusan akan merusak audit trail inventaris.')
+                                ->send();
+                            
+                            $action->cancel();
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make()->visible(fn (): bool => auth()->user()?->isAdmin() ?? false),
+                    DeleteBulkAction::make()
+                        ->visible(fn (): bool => auth()->user()?->isAdmin() ?? false)
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            $failedCount = 0;
+                            foreach ($records as $record) {
+                                if ($record->movementLines()->exists()) {
+                                    $failedCount++;
+                                } else {
+                                    $record->delete();
+                                }
+                            }
+                            
+                            if ($failedCount > 0) {
+                                \Filament\Notifications\Notification::make()
+                                    ->warning()
+                                    ->title('Penghapusan Sebagian Berhasil')
+                                    ->body("{$failedCount} barang tidak dapat dihapus karena sudah memiliki riwayat pergerakan stok. Hal ini untuk melindungi integritas audit trail inventaris.")
+                                    ->send();
+                            } else {
+                                \Filament\Notifications\Notification::make()
+                                    ->success()
+                                    ->title('Semua barang berhasil dihapus')
+                                    ->send();
+                            }
+                        }),
                 ]),
             ]);
     }
@@ -288,5 +460,27 @@ class ItemResource extends Resource
         }
 
         return number_format((float) $state, 2, '.', '');
+    }
+
+    /**
+     * Reusable SQL subquery to compute the current stock of an item
+     * from stock_movement_lines, used by table filters.
+     */
+    private static function currentStockSubquery(): string
+    {
+        return <<<'SQL'
+coalesce((
+    select sum(
+        case
+            when sm.destination_location_id is not null and sm.source_location_id is null then sml.quantity
+            when sm.source_location_id is not null and sm.destination_location_id is null then -sml.quantity
+            else 0
+        end
+    )
+    from stock_movement_lines sml
+    inner join stock_movements sm on sm.id = sml.stock_movement_id
+    where sml.item_id = items.id
+), 0)
+SQL;
     }
 }

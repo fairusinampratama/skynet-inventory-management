@@ -36,7 +36,6 @@ trait SeedsItemCategories
                     array_filter([
                         'code' => $code,
                         'description' => $description,
-                        'is_active' => true,
                     ], fn (mixed $value): bool => $value !== null),
                 ),
             ])

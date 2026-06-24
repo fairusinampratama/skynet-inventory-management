@@ -21,7 +21,7 @@ class StockDetailTableWidget extends TableWidget
             ->columns([
                 TextColumn::make('code')->label('Kode')->searchable(),
                 TextColumn::make('name')->label('Barang')->searchable(),
-                TextColumn::make('category.name')->label('Jenis/Kategori'),
+                TextColumn::make('category.name')->label('Kategori'),
                 TextColumn::make('unit.symbol')->label('Satuan'),
                 TextColumn::make('computed_current_stock')->label('Stok Saat Ini')->formatStateUsing(fn (mixed $state): string => StockFormatter::format($state))->badge()
                     ->color(fn (Item $record): string => match ($record->stock_status) {
@@ -45,7 +45,7 @@ class StockDetailTableWidget extends TableWidget
     private static function stockDetailQuery(): Builder
     {
         $movementEffect = self::movementEffectSql();
-        $currentStock = "(items.opening_balance + {$movementEffect})";
+        $currentStock = "({$movementEffect})";
 
         return Item::query()
             ->with(['category', 'unit', 'movementLines.movement'])

@@ -39,11 +39,11 @@ class StockLocationResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->label('Nama')->required()->maxLength(255)->unique(ignoreRecord: true),
-            TextInput::make('code')->label('Kode')->maxLength(255)->unique(ignoreRecord: true),
-            Select::make('type')->label('Jenis')->options(self::typeOptions())->default('warehouse')->required(),
-            Toggle::make('is_active')->label('Aktif')->default(true),
-            Textarea::make('notes')->label('Catatan')->columnSpanFull(),
+            TextInput::make('name')->label('Nama')->helperText('Nama lokasi penyimpanan (contoh: Gudang Pusat, Mobil Teknisi A).')->required()->maxLength(255)->unique(ignoreRecord: true),
+            TextInput::make('code')->label('Kode')->helperText('Kode singkat lokasi untuk memudahkan identifikasi.')->maxLength(255)->unique(ignoreRecord: true),
+            Select::make('type')->label('Jenis')->helperText('Pilih tipe lokasi apakah ini Gudang Utama, Cabang, atau Lapangan/Teknisi.')->options(self::typeOptions())->default('warehouse')->required(),
+
+            Textarea::make('notes')->label('Catatan')->helperText('Deskripsi tambahan mengenai lokasi gudang ini.')->columnSpanFull(),
         ]);
     }
 
@@ -55,7 +55,7 @@ class StockLocationResource extends Resource
                 TextColumn::make('code')->label('Kode')->searchable(),
                 TextColumn::make('type')->label('Jenis')->badge()
                     ->formatStateUsing(fn (string $state): string => self::typeOptions()[$state] ?? $state),
-                IconColumn::make('is_active')->label('Aktif')->boolean(),
+
             ])
             ->headerActions([CreateAction::make()])
             ->recordActions([EditAction::make(), DeleteAction::make()]);

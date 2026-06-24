@@ -37,8 +37,8 @@ class StockAdjustmentReasonResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->label('Nama')->required()->maxLength(255)->unique(ignoreRecord: true),
-            Toggle::make('is_active')->label('Aktif')->default(true),
+            TextInput::make('name')->label('Nama')->helperText('Alasan mengapa stok perlu disesuaikan (contoh: Stok Hilang, Barang Rusak, Salah Hitung).')->required()->maxLength(255)->unique(ignoreRecord: true),
+
         ]);
     }
 
@@ -47,7 +47,7 @@ class StockAdjustmentReasonResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->label('Nama')->searchable()->sortable(),
-                IconColumn::make('is_active')->label('Aktif')->boolean(),
+
             ])
             ->headerActions([CreateAction::make()])
             ->recordActions([EditAction::make(), DeleteAction::make()]);

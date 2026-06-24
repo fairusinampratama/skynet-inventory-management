@@ -37,9 +37,9 @@ class UnitResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->label('Nama')->required()->maxLength(255)->unique(ignoreRecord: true),
-            TextInput::make('symbol')->label('Simbol')->required()->maxLength(255)->unique(ignoreRecord: true),
-            Toggle::make('is_active')->label('Aktif')->default(true),
+            TextInput::make('name')->label('Nama')->helperText('Nama panjang satuan (contoh: Pieces, Meter, Kotak).')->required()->maxLength(255)->unique(ignoreRecord: true),
+            TextInput::make('symbol')->label('Simbol')->helperText('Simbol atau singkatan yang akan ditampilkan di aplikasi (contoh: Pcs, M, Box).')->required()->maxLength(255)->unique(ignoreRecord: true),
+
         ]);
     }
 
@@ -49,7 +49,7 @@ class UnitResource extends Resource
             ->columns([
                 TextColumn::make('name')->label('Nama')->searchable()->sortable(),
                 TextColumn::make('symbol')->label('Simbol')->searchable(),
-                IconColumn::make('is_active')->label('Aktif')->boolean(),
+
             ])
             ->headerActions([CreateAction::make()])
             ->recordActions([EditAction::make(), DeleteAction::make()]);

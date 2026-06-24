@@ -64,10 +64,6 @@ class StockMovement extends Model
         return $this->belongsTo(StockLocation::class, 'destination_location_id');
     }
 
-    public function purpose(): BelongsTo
-    {
-        return $this->belongsTo(MovementPurpose::class, 'movement_purpose_id');
-    }
 
     public function adjustmentReason(): BelongsTo
     {
