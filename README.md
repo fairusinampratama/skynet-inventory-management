@@ -2,6 +2,19 @@
 
 Laravel + Filament inventory management for Skynet warehouse operations. The app manages item masters, category-based item codes, multi-location stock movements, low/empty/negative stock reporting, and CSV exports.
 
+## Features
+
+- **Multi-location stock tracking** — track inventory across multiple warehouses and branches
+- **Stock movement recording** — log stock-in, stock-out, transfer between locations, and adjustments
+- **Real-time stock validation** — prevents negative stock by blocking movements that exceed available quantity
+- **Stock adjustment (opname)** — reconcile physical counts against system records with reason tracking
+- **Categorized adjustment reasons** — stock adjustment reasons are grouped by type for easier selection
+- **Rich table filters** — filter items by category, unit, stock status, reorder need, and location; filter movements by date range, location, item, and PIC
+- **Dynamic location view** — when filtering items by a specific warehouse, the stock column automatically shows stock at that location only
+- **CSV exports** — export current stock snapshot and full movement history
+- **Activity log** — all changes are recorded for audit purposes
+- **Admin user guide** — see `PANDUAN_ADMIN.md` for a full usage guide in Bahasa Indonesia
+
 ## Requirements
 
 - PHP 8.3+
@@ -61,9 +74,10 @@ Open the admin panel at `/admin`.
 
 - The application UI and operational seed data use Indonesian business labels.
 - Item codes are generated automatically from the selected item category code, for example `DST-0001`, `FDR-0001`, `IKR-0001`, `AKS-0001`, `BHP-0001`, `ONT-0001`, and `ALT-0001`.
-- Barang records require name, category, unit, price, opening stock, and minimum stock. Notes remain optional.
-- Movement purposes are categorized by movement type: stock in, stock out, transfer, or adjustment. The Stock Movement form filters purpose options based on the selected movement type.
-- Stock locations support `warehouse`, `branch`, and `field` types. These are currently informational labels and reporting/grouping metadata, not hard movement restrictions.
+- Barang records require name, category, unit, and minimum stock. Notes and price remain optional.
+- Stock locations support `warehouse`, `branch`, and `field` types. These are currently informational labels used for reporting and grouping, not hard movement restrictions.
+- Stock levels are computed in real-time from `stock_movement_lines` — there is no dedicated ledger table. The `Item::stockForLocation()` method is the single source of truth.
+- Negative stock is prevented at two layers: the Filament form validates quantity against available stock on the frontend (real-time, debounced), and `ManageStockMovements` re-validates inside a `DB::transaction` on the backend as a last line of defense.
 - Excel item import is available through `ExcelInventorySeeder` and is disabled by default unless `SEED_EXCEL_INVENTORY=true`.
 
 To generate codes for legacy items without a code:
@@ -88,6 +102,7 @@ The demo seeder creates a realistic ISP warehouse training dataset:
 - Item categories such as Distribusi, Feeder, IKR/PSB, ONT/Router, Aksesoris, Alat, and Bahan Habis Pakai.
 - Locations `MAIN`, `KRIAN`, `SDA`, `SBYB`, `GRS`, and `FIELD`.
 - Stock movements for opening balances, supplier restocks, branch transfers, daily usage, returns, and adjustments.
+- Stock adjustment reasons categorized into groups: Audit, Pengurangan, and Lainnya.
 - Example stock statuses: safe stock, low stock, empty stock, and negative stock.
 
 The demo seeder is idempotent for the demo dataset. When rerun, it replaces previous demo items and demo movements with the same training dataset.
@@ -96,8 +111,10 @@ Quick trial flow:
 
 1. Log in at `http://localhost:8000/admin` with `admin@skynet.local` / `password`.
 2. Open `Barang` to inspect item codes, categories, units, and stock status examples.
-3. Open `Pergerakan Stok` and filter by movement type, purpose, or PIC.
-4. Export current stock or movement history from the table header actions.
+3. Use the filter panel to filter by stock status, location, or reorder need.
+4. Open `Pergerakan Stok` and filter by movement type, date range, location, item, or PIC.
+5. Export current stock or movement history from the table header actions.
+6. Refer to `PANDUAN_ADMIN.md` for a full step-by-step guide in Bahasa Indonesia.
 
 ## Deployment With Nixpacks
 
