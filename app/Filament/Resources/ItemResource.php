@@ -277,7 +277,38 @@ class ItemResource extends Resource
                 Action::make('exportCurrentStock')
                     ->label('Ekspor CSV')
                     ->icon(Heroicon::OutlinedArrowDownTray)
-                    ->url(route('exports.current-stock'), shouldOpenInNewTab: true),
+                    ->url(function (Action $action): string {
+                        $livewire = $action->getTable()->getLivewire();
+
+                        $params = [];
+
+                        $category = $livewire->getTableFilterState('item_category_id');
+                        if (! empty($category['value'])) {
+                            $params['category_id'] = $category['value'];
+                        }
+
+                        $unit = $livewire->getTableFilterState('unit_id');
+                        if (! empty($unit['value'])) {
+                            $params['unit_id'] = $unit['value'];
+                        }
+
+                        $stockStatus = $livewire->getTableFilterState('stock_status');
+                        if (! empty($stockStatus['value'])) {
+                            $params['stock_status'] = $stockStatus['value'];
+                        }
+
+                        $needsReorder = $livewire->getTableFilterState('needs_reorder');
+                        if (isset($needsReorder['value']) && $needsReorder['value'] !== null && $needsReorder['value'] !== '') {
+                            $params['needs_reorder'] = $needsReorder['value'] ? '1' : '0';
+                        }
+
+                        $location = $livewire->getTableFilterState('location');
+                        if (! empty($location['value'])) {
+                            $params['location_id'] = $location['value'];
+                        }
+
+                        return route('exports.current-stock', $params);
+                    }, shouldOpenInNewTab: true),
                 CreateAction::make(),
             ])
             ->recordActions([

@@ -65,6 +65,11 @@ class StockMovement extends Model
     }
 
 
+    public function purpose(): BelongsTo
+    {
+        return $this->belongsTo(MovementPurpose::class, 'movement_purpose_id');
+    }
+
     public function adjustmentReason(): BelongsTo
     {
         return $this->belongsTo(StockAdjustmentReason::class, 'stock_adjustment_reason_id');

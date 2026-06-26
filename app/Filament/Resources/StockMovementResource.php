@@ -376,7 +376,41 @@ class StockMovementResource extends Resource
                 Action::make('exportMovementHistory')
                     ->label('Ekspor CSV')
                     ->icon(Heroicon::OutlinedArrowDownTray)
-                    ->url(route('exports.movement-history'), shouldOpenInNewTab: true),
+                    ->url(function (Action $action): string {
+                        $livewire = $action->getTable()->getLivewire();
+
+                        $params = [];
+
+                        $type = $livewire->getTableFilterState('type');
+                        if (! empty($type['value'])) {
+                            $params['type'] = $type['value'];
+                        }
+
+                        $date = $livewire->getTableFilterState('movement_date');
+                        if (! empty($date['from'])) {
+                            $params['from'] = $date['from'];
+                        }
+                        if (! empty($date['until'])) {
+                            $params['until'] = $date['until'];
+                        }
+
+                        $location = $livewire->getTableFilterState('location');
+                        if (! empty($location['value'])) {
+                            $params['location_id'] = $location['value'];
+                        }
+
+                        $item = $livewire->getTableFilterState('item');
+                        if (! empty($item['value'])) {
+                            $params['item_id'] = $item['value'];
+                        }
+
+                        $pic = $livewire->getTableFilterState('pic');
+                        if (! empty($pic['value'])) {
+                            $params['pic'] = $pic['value'];
+                        }
+
+                        return route('exports.movement-history', $params);
+                    }, shouldOpenInNewTab: true),
                 CreateAction::make(),
             ])
             ->recordActions([
